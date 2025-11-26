@@ -387,7 +387,16 @@ async function generateClaimSignature(claimerAddress, tokenId, observation) {
     return signature;
 }
 
-async function executeRelayClaim(recipientAddress, tokenId, observation) {
+/**
+ * Execute relay claim with optimistic response
+ * Returns immediately after tx submission, confirmation happens in background
+ * @param {string} recipientAddress - Address to receive NFT
+ * @param {number} tokenId - Token ID to claim
+ * @param {string} observation - User's observation text
+ * @param {boolean} waitForConfirmation - If true, wait for tx confirmation (legacy behavior)
+ * @returns {Promise<Object>} Transaction result
+ */
+async function executeRelayClaim(recipientAddress, tokenId, observation, waitForConfirmation = false) {
     if (!claimerContractWithSigner) {
         throw new Error('Claimer contract not configured');
     }
@@ -410,11 +419,31 @@ async function executeRelayClaim(recipientAddress, tokenId, observation) {
     );
 
     console.log(`Transaction submitted: ${tx.hash}`);
+
+    // Optimistic mode: return immediately with tx hash
+    if (!waitForConfirmation) {
+        // Fire-and-forget: Log confirmation in background
+        tx.wait().then(receipt => {
+            console.log(`[Background] TX ${tx.hash} confirmed in block ${receipt.blockNumber}`);
+        }).catch(err => {
+            console.error(`[Background] TX ${tx.hash} failed:`, err.message);
+        });
+
+        return {
+            txHash: tx.hash,
+            broadcasting: true,
+            blockNumber: null,
+            gasUsed: null
+        };
+    }
+
+    // Legacy mode: wait for confirmation
     const receipt = await tx.wait();
     console.log(`Transaction confirmed in block ${receipt.blockNumber}`);
 
     return {
         txHash: tx.hash,
+        broadcasting: false,
         blockNumber: receipt.blockNumber,
         gasUsed: receipt.gasUsed.toString()
     };
@@ -576,13 +605,13 @@ app.post('/api/submit-observation', async (req, res) => {
         // Success - reset failure count for this IP
         resetGuardianFailures(clientIP);
 
-        // Execute relay claim
-        console.log(`[Guardian] Approved! Executing relay claim...`);
+        // Execute relay claim (optimistic - returns immediately with tx hash)
+        console.log(`[Guardian] Approved! Executing relay claim (optimistic)...`);
 
         try {
-            const txResult = await executeRelayClaim(address, tokenId, trimmedObservation);
+            const txResult = await executeRelayClaim(address, tokenId, trimmedObservation, false);
 
-            console.log(`[Guardian] Claim successful! TX: ${txResult.txHash}`);
+            console.log(`[Guardian] TX submitted: ${txResult.txHash} (broadcasting: ${txResult.broadcasting})`);
 
             res.json({
                 approved: true,
@@ -590,6 +619,7 @@ app.post('/api/submit-observation', async (req, res) => {
                 score: evaluation.score,
                 message: "The Guardian welcomes you to the collective.",
                 claimed: true,
+                broadcasting: txResult.broadcasting, // true = optimistic response, false = confirmed
                 claimResult: {
                     txHash: txResult.txHash,
                     blockNumber: txResult.blockNumber,

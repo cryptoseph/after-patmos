@@ -255,14 +255,34 @@
                 </div>
             </div>
 
-            <!-- Step 2: AI Evaluation -->
+            <!-- Step 2: AI Evaluation with Progress -->
             <div id="claim-step-2" style="display: none;">
                 <div class="guardian-evaluating">
                     <div class="guardian-icon">🏔️</div>
-                    <h3>The Guardian is evaluating...</h3>
-                    <p>Your observation is being assessed for authenticity and depth.</p>
+
+                    <!-- Two-step progress indicator -->
+                    <div class="claim-progress">
+                        <div class="progress-step active" data-step="1">
+                            <div class="step-number">1</div>
+                            <div class="step-label">AI Analyzing</div>
+                        </div>
+                        <div class="progress-connector"></div>
+                        <div class="progress-step" data-step="2">
+                            <div class="step-number">2</div>
+                            <div class="step-label">Broadcasting</div>
+                        </div>
+                    </div>
+
+                    <h3 id="progress-title">The Guardian is evaluating...</h3>
+                    <p id="progress-description">Your observation is being assessed for authenticity and depth.</p>
+
                     <div class="loading-dots">
                         <span></span><span></span><span></span>
+                    </div>
+
+                    <!-- Broadcasting status (shown during step 2) -->
+                    <div id="broadcasting-status" class="broadcasting-status" style="display: none;">
+                        <p class="tx-pending">Transaction submitted to Ethereum network...</p>
                     </div>
                 </div>
             </div>

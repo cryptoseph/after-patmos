@@ -99,27 +99,31 @@ body {
     border-radius: 4px;
 }
 
-/* NFT Regions - positioned absolutely over the artwork */
+/* NFT Regions - CSS Grid Layout (10x10) */
 #nft-regions {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    grid-template-rows: repeat(10, 1fr);
     pointer-events: none;
 }
 
 .nft-region {
-    position: absolute;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
     pointer-events: all;
     border: 1px solid transparent;
+    /* Grid placement handled by CSS order property */
 }
 
 .nft-region:hover {
     border-color: rgba(255, 255, 255, 0.5);
     z-index: 10;
+    background-color: rgba(255, 255, 255, 0.05);
 }
 
 /* Blackout overlay for non-owned pieces */
@@ -131,6 +135,34 @@ body {
 .nft-region.blackout:hover {
     background-color: rgba(0, 0, 0, 0.75);
     border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Mobile Zoom Feature */
+#artwork-wrapper {
+    position: relative;
+    max-width: 90vw;
+    width: auto;
+    height: auto;
+    margin: 20px auto;
+    transition: transform 0.3s ease;
+    transform-origin: center center;
+}
+
+#artwork-wrapper.zoomed {
+    transform: scale(2.5);
+    cursor: zoom-out;
+}
+
+/* Zoom hint for mobile */
+.zoom-hint {
+    display: none;
+    position: absolute;
+    bottom: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    color: #888;
+    white-space: nowrap;
 }
 
 /* Info Panel */
@@ -1736,4 +1768,148 @@ body {
     body {
         color-scheme: dark;
     }
+}
+
+/* ============ MOBILE ZOOM FEATURE ============ */
+@media (max-width: 768px) {
+    .zoom-hint {
+        display: block;
+    }
+
+    #artwork-wrapper {
+        cursor: zoom-in;
+    }
+
+    #artwork-wrapper.zoomed {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(2.5);
+        z-index: 2000;
+        cursor: zoom-out;
+    }
+
+    /* Backdrop when zoomed */
+    #artwork-wrapper.zoomed::before {
+        content: '';
+        position: fixed;
+        top: -100vh;
+        left: -100vw;
+        width: 300vw;
+        height: 300vh;
+        background: rgba(0, 0, 0, 0.95);
+        z-index: -1;
+    }
+}
+
+/* ============ PROGRESS STEPS UI ============ */
+.claim-progress {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 25px;
+}
+
+.progress-step {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    font-size: 12px;
+    color: #666;
+    transition: all 0.3s ease;
+}
+
+.progress-step .step-number {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 11px;
+}
+
+.progress-step.active {
+    background: rgba(76, 175, 80, 0.1);
+    border-color: rgba(76, 175, 80, 0.4);
+    color: #4CAF50;
+}
+
+.progress-step.active .step-number {
+    background: #4CAF50;
+    color: #000;
+}
+
+.progress-step.completed {
+    background: rgba(76, 175, 80, 0.05);
+    border-color: rgba(76, 175, 80, 0.2);
+    color: #4CAF50;
+}
+
+.progress-step.completed .step-number {
+    background: #4CAF50;
+    color: #000;
+}
+
+.progress-step.completed .step-number::after {
+    content: '✓';
+    font-size: 10px;
+}
+
+.progress-connector {
+    width: 30px;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.1);
+    align-self: center;
+}
+
+.progress-connector.active {
+    background: linear-gradient(90deg, #4CAF50, rgba(76, 175, 80, 0.3));
+}
+
+/* Broadcasting animation */
+.broadcasting-status {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    padding: 30px 20px;
+}
+
+.broadcasting-icon {
+    font-size: 48px;
+    animation: pulse-broadcast 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-broadcast {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+.broadcasting-text {
+    color: #4CAF50;
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.broadcasting-subtext {
+    color: #888;
+    font-size: 13px;
+    text-align: center;
+}
+
+.tx-hash-preview {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #666;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 8px 12px;
+    border-radius: 6px;
+    word-break: break-all;
 }

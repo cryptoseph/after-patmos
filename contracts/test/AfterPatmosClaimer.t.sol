@@ -32,6 +32,13 @@ contract AfterPatmosClaimerTest is Test {
     address public user1 = address(3);
     address public user2 = address(4);
 
+    event NFTClaimed(
+        address indexed claimer,
+        uint256 indexed tokenId,
+        string observation,
+        uint256 timestamp
+    );
+
     function setUp() public {
         signer = vm.addr(signerPrivateKey);
 
@@ -48,33 +55,62 @@ contract AfterPatmosClaimerTest is Test {
     }
 
     function testDepositNFTs() public {
-        // Mint NFTs to owner
+        // Mint NFTs to owner (must be 1-100 range for bitmap)
         vm.startPrank(owner);
-        uint256 tokenId1 = nft.mint(owner);
-        uint256 tokenId2 = nft.mint(owner);
+        nft.mintSpecific(owner, 1);
+        nft.mintSpecific(owner, 2);
 
         // Approve claimer
         nft.setApprovalForAll(address(claimer), true);
 
         // Deposit
         uint256[] memory tokenIds = new uint256[](2);
-        tokenIds[0] = tokenId1;
-        tokenIds[1] = tokenId2;
+        tokenIds[0] = 1;
+        tokenIds[1] = 2;
         claimer.depositNFTs(tokenIds);
         vm.stopPrank();
 
         // Verify
-        assertEq(nft.ownerOf(tokenId1), address(claimer));
-        assertEq(nft.ownerOf(tokenId2), address(claimer));
+        assertEq(nft.ownerOf(1), address(claimer));
+        assertEq(nft.ownerOf(2), address(claimer));
         assertEq(claimer.availableCount(), 2);
-        assertTrue(claimer.isTokenAvailable(tokenId1));
-        assertTrue(claimer.isTokenAvailable(tokenId2));
+        assertTrue(claimer.isTokenAvailable(1));
+        assertTrue(claimer.isTokenAvailable(2));
+    }
+
+    function testBitmapTracking() public {
+        // Setup: deposit multiple NFTs to test bitmap
+        vm.startPrank(owner);
+        for (uint256 i = 1; i <= 10; i++) {
+            nft.mintSpecific(owner, i);
+        }
+        nft.setApprovalForAll(address(claimer), true);
+
+        uint256[] memory tokenIds = new uint256[](10);
+        for (uint256 i = 0; i < 10; i++) {
+            tokenIds[i] = i + 1;
+        }
+        claimer.depositNFTs(tokenIds);
+        vm.stopPrank();
+
+        // Check deposited bitmap
+        uint256 depositedBitmap = claimer.getDepositedBitmap();
+        // First 10 bits should be set: 0b1111111111 = 1023
+        assertEq(depositedBitmap, 1023);
+
+        // Check claimed bitmap is 0
+        assertEq(claimer.getClaimedBitmap(), 0);
+
+        // All tokens should be available
+        uint256[] memory available = claimer.getAvailableTokens();
+        assertEq(available.length, 10);
     }
 
     function testClaimNFT() public {
-        // Setup: deposit an NFT
+        // Setup: deposit an NFT (must be in 1-100 range)
+        uint256 tokenId = 1;
         vm.startPrank(owner);
-        uint256 tokenId = nft.mint(owner);
+        nft.mintSpecific(owner, tokenId);
         nft.setApprovalForAll(address(claimer), true);
         uint256[] memory tokenIds = new uint256[](1);
         tokenIds[0] = tokenId;
@@ -90,6 +126,10 @@ contract AfterPatmosClaimerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, ethSignedHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
+        // Expect the NFTClaimed event
+        vm.expectEmit(true, true, false, true);
+        emit NFTClaimed(user1, tokenId, observation, block.timestamp);
+
         // Claim
         vm.prank(user1);
         claimer.claimNFT(tokenId, observation, signature);
@@ -97,36 +137,105 @@ contract AfterPatmosClaimerTest is Test {
         // Verify
         assertEq(nft.ownerOf(tokenId), user1);
         assertTrue(claimer.hasClaimed(user1));
-        assertTrue(claimer.tokenClaimed(tokenId));
         assertEq(claimer.availableCount(), 0);
+        assertFalse(claimer.isTokenAvailable(tokenId));
 
-        (string memory storedObs, address observer) = claimer.getObservation(tokenId);
-        assertEq(storedObs, observation);
-        assertEq(observer, user1);
+        // Check claimed bitmap has bit 0 set (for token 1)
+        assertEq(claimer.getClaimedBitmap(), 1);
+    }
+
+    function testRelayClaimNFT() public {
+        // Setup: deposit an NFT
+        uint256 tokenId = 5;
+        vm.startPrank(owner);
+        nft.mintSpecific(owner, tokenId);
+        nft.setApprovalForAll(address(claimer), true);
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = tokenId;
+        claimer.depositNFTs(tokenIds);
+        vm.stopPrank();
+
+        string memory observation = "Relayed claim observation";
+
+        // Only signer can relay
+        vm.prank(signer);
+        claimer.relayClaimNFT(user1, tokenId, observation);
+
+        // Verify
+        assertEq(nft.ownerOf(tokenId), user1);
+        assertTrue(claimer.hasClaimed(user1));
+        assertFalse(claimer.isTokenAvailable(tokenId));
+
+        // Check claimed bitmap has bit 4 set (for token 5)
+        assertEq(claimer.getClaimedBitmap(), 16); // 2^4 = 16
+    }
+
+    function testCannotRelayIfNotSigner() public {
+        // Setup
+        uint256 tokenId = 1;
+        vm.startPrank(owner);
+        nft.mintSpecific(owner, tokenId);
+        nft.setApprovalForAll(address(claimer), true);
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = tokenId;
+        claimer.depositNFTs(tokenIds);
+        vm.stopPrank();
+
+        // Non-signer tries to relay
+        vm.prank(user1);
+        vm.expectRevert("Only signer can relay");
+        claimer.relayClaimNFT(user2, tokenId, "Test observation");
     }
 
     function testCannotClaimTwice() public {
         // Setup: deposit NFTs
         vm.startPrank(owner);
-        uint256 tokenId1 = nft.mint(owner);
-        uint256 tokenId2 = nft.mint(owner);
+        nft.mintSpecific(owner, 1);
+        nft.mintSpecific(owner, 2);
         nft.setApprovalForAll(address(claimer), true);
         uint256[] memory tokenIds = new uint256[](2);
-        tokenIds[0] = tokenId1;
-        tokenIds[1] = tokenId2;
+        tokenIds[0] = 1;
+        tokenIds[1] = 2;
         claimer.depositNFTs(tokenIds);
         vm.stopPrank();
 
         // First claim
-        bytes memory signature1 = _signClaim(user1, tokenId1, "First observation");
+        bytes memory signature1 = _signClaim(user1, 1, "First observation");
         vm.prank(user1);
-        claimer.claimNFT(tokenId1, "First observation", signature1);
+        claimer.claimNFT(1, "First observation", signature1);
 
         // Try to claim again
-        bytes memory signature2 = _signClaim(user1, tokenId2, "Second observation");
+        bytes memory signature2 = _signClaim(user1, 2, "Second observation");
         vm.prank(user1);
         vm.expectRevert(AfterPatmosClaimer.AlreadyClaimed.selector);
-        claimer.claimNFT(tokenId2, "Second observation", signature2);
+        claimer.claimNFT(2, "Second observation", signature2);
+    }
+
+    function testCannotClaimSameTokenTwice() public {
+        // Setup
+        uint256 tokenId = 1;
+        vm.startPrank(owner);
+        nft.mintSpecific(owner, tokenId);
+        nft.setApprovalForAll(address(claimer), true);
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = tokenId;
+        claimer.depositNFTs(tokenIds);
+        vm.stopPrank();
+
+        // First user claims
+        bytes memory sig1 = _signClaim(user1, tokenId, "Observation 1");
+        vm.prank(user1);
+        claimer.claimNFT(tokenId, "Observation 1", sig1);
+
+        // Reset user1's claim status
+        vm.prank(owner);
+        claimer.resetClaimStatus(user1);
+
+        // User1 tries to claim same token again
+        bytes memory sig2 = _signClaim(user1, tokenId, "Observation 2");
+        vm.prank(user1);
+        vm.expectRevert(AfterPatmosClaimer.TokenNotAvailable.selector);
+        claimer.claimNFT(tokenId, "Observation 2", sig2);
     }
 
     function _signClaim(address claimer_, uint256 tokenId, string memory observation) internal view returns (bytes memory) {
@@ -138,8 +247,9 @@ contract AfterPatmosClaimerTest is Test {
 
     function testInvalidSignature() public {
         // Setup
+        uint256 tokenId = 1;
         vm.startPrank(owner);
-        uint256 tokenId = nft.mint(owner);
+        nft.mintSpecific(owner, tokenId);
         nft.setApprovalForAll(address(claimer), true);
         uint256[] memory tokenIds = new uint256[](1);
         tokenIds[0] = tokenId;
@@ -163,8 +273,9 @@ contract AfterPatmosClaimerTest is Test {
 
     function testObservationTooShort() public {
         // Setup
+        uint256 tokenId = 1;
         vm.startPrank(owner);
-        uint256 tokenId = nft.mint(owner);
+        nft.mintSpecific(owner, tokenId);
         nft.setApprovalForAll(address(claimer), true);
         uint256[] memory tokenIds = new uint256[](1);
         tokenIds[0] = tokenId;
@@ -185,14 +296,32 @@ contract AfterPatmosClaimerTest is Test {
         claimer.claimNFT(tokenId, observation, signature);
     }
 
+    function testInvalidTokenId() public {
+        // Try to deposit token 0 (invalid)
+        vm.startPrank(owner);
+        nft.mintSpecific(owner, 101); // Out of range
+        nft.setApprovalForAll(address(claimer), true);
+
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = 101;
+
+        vm.expectRevert(AfterPatmosClaimer.InvalidTokenId.selector);
+        claimer.depositNFTs(tokenIds);
+        vm.stopPrank();
+    }
+
     function testWithdrawNFTs() public {
         // Setup
+        uint256 tokenId = 1;
         vm.startPrank(owner);
-        uint256 tokenId = nft.mint(owner);
+        nft.mintSpecific(owner, tokenId);
         nft.setApprovalForAll(address(claimer), true);
         uint256[] memory tokenIds = new uint256[](1);
         tokenIds[0] = tokenId;
         claimer.depositNFTs(tokenIds);
+
+        // Verify deposited
+        assertTrue(claimer.isTokenAvailable(tokenId));
 
         // Withdraw
         claimer.withdrawNFTs(tokenIds, owner);
@@ -200,6 +329,10 @@ contract AfterPatmosClaimerTest is Test {
 
         assertEq(nft.ownerOf(tokenId), owner);
         assertEq(claimer.availableCount(), 0);
+        assertFalse(claimer.isTokenAvailable(tokenId));
+
+        // Deposited bitmap should be cleared
+        assertEq(claimer.getDepositedBitmap(), 0);
     }
 
     function testSetSigner() public {
@@ -221,8 +354,9 @@ contract AfterPatmosClaimerTest is Test {
 
     function testResetClaimStatus() public {
         // Setup and claim
+        uint256 tokenId = 1;
         vm.startPrank(owner);
-        uint256 tokenId = nft.mint(owner);
+        nft.mintSpecific(owner, tokenId);
         nft.setApprovalForAll(address(claimer), true);
         uint256[] memory tokenIds = new uint256[](1);
         tokenIds[0] = tokenId;
@@ -247,5 +381,73 @@ contract AfterPatmosClaimerTest is Test {
         claimer.resetClaimStatus(user1);
 
         assertFalse(claimer.hasClaimed(user1));
+    }
+
+    function testETHDeposit() public {
+        // Send ETH to contract
+        vm.deal(user1, 1 ether);
+        vm.prank(user1);
+        (bool success,) = address(claimer).call{value: 0.5 ether}("");
+        assertTrue(success);
+
+        assertEq(claimer.getETHBalance(), 0.5 ether);
+    }
+
+    function testETHWithdraw() public {
+        // Fund contract
+        vm.deal(address(claimer), 1 ether);
+
+        uint256 ownerBalanceBefore = owner.balance;
+
+        vm.prank(owner);
+        claimer.withdrawETH(0.5 ether);
+
+        assertEq(owner.balance - ownerBalanceBefore, 0.5 ether);
+        assertEq(claimer.getETHBalance(), 0.5 ether);
+    }
+
+    function testOnERC721Received() public {
+        // Test that safeTransferFrom auto-deposits
+        uint256 tokenId = 42;
+        vm.startPrank(owner);
+        nft.mintSpecific(owner, tokenId);
+
+        // Safe transfer to claimer
+        nft.safeTransferFrom(owner, address(claimer), tokenId);
+        vm.stopPrank();
+
+        // Should be marked as deposited
+        assertTrue(claimer.isTokenAvailable(tokenId));
+        assertEq(nft.ownerOf(tokenId), address(claimer));
+    }
+
+    function testGetAvailableTokens() public {
+        // Setup multiple tokens
+        vm.startPrank(owner);
+        for (uint256 i = 1; i <= 5; i++) {
+            nft.mintSpecific(owner, i);
+        }
+        nft.setApprovalForAll(address(claimer), true);
+
+        uint256[] memory tokenIds = new uint256[](5);
+        for (uint256 i = 0; i < 5; i++) {
+            tokenIds[i] = i + 1;
+        }
+        claimer.depositNFTs(tokenIds);
+        vm.stopPrank();
+
+        // Claim token 3
+        bytes memory sig = _signClaim(user1, 3, "Claiming token 3");
+        vm.prank(user1);
+        claimer.claimNFT(3, "Claiming token 3", sig);
+
+        // Get available should return 4 tokens (1, 2, 4, 5)
+        uint256[] memory available = claimer.getAvailableTokens();
+        assertEq(available.length, 4);
+
+        // Verify token 3 is not in the list
+        for (uint256 i = 0; i < available.length; i++) {
+            assertTrue(available[i] != 3);
+        }
     }
 }

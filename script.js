@@ -256,49 +256,98 @@ async function fetchOwnershipEtherscan() {
     return [];
 }
 
-// Create the interactive grid
+/**
+ * Build visual order array for CSS Grid
+ * Grid layout: 10 cols x 10 rows
+ * Row 0: tokens 51-60, Row 1: 61-70, ... Row 4: 91-100
+ * Row 5: tokens 1-10, Row 6: 11-20, ... Row 8: 31-40
+ * Row 9: tokens 41-50
+ */
+function getVisualOrder() {
+    const order = [];
+    // Top half: rows 0-4 (tokens 51-100)
+    for (let row = 0; row < 5; row++) {
+        for (let col = 0; col < 10; col++) {
+            order.push(51 + (row * 10) + col);
+        }
+    }
+    // Middle: rows 5-8 (tokens 1-40)
+    for (let row = 0; row < 4; row++) {
+        for (let col = 0; col < 10; col++) {
+            order.push(1 + (row * 10) + col);
+        }
+    }
+    // Bottom: row 9 (tokens 41-50)
+    for (let col = 0; col < 10; col++) {
+        order.push(41 + col);
+    }
+    return order;
+}
+
+// Create the interactive grid using CSS Grid (no manual positioning)
 function createNFTGrid(ownedTokens) {
     const nftRegionsContainer = document.getElementById('nft-regions');
     if (!nftRegionsContainer) return;
 
     nftRegionsContainer.innerHTML = '';
     const ownedSet = new Set(ownedTokens);
+    const visualOrder = getVisualOrder();
 
-    // Create regions for all 100 NFTs
-    for (let tokenId = 1; tokenId <= 100; tokenId++) {
-        const gridPos = TOKEN_TO_GRID[tokenId];
-        if (!gridPos) continue;
-
+    // Create regions in visual order - CSS Grid handles positioning
+    visualOrder.forEach((tokenId) => {
         const region = document.createElement('div');
         region.className = 'nft-region';
         region.dataset.tokenId = tokenId;
 
-        // Position based on grid (10x10)
-        const cellWidth = 10; // 10% each
-        const cellHeight = 10; // 10% each
-
-        region.style.left = `${gridPos.col * cellWidth}%`;
-        region.style.top = `${gridPos.row * cellHeight}%`;
-        region.style.width = `${cellWidth}%`;
-        region.style.height = `${cellHeight}%`;
-
         const isOwned = ownedSet.has(tokenId);
 
-        // Blackout if NOT owned by treasury
+        // Blackout if NOT owned by claimer contract
         if (!isOwned) {
             region.classList.add('blackout');
         }
 
-        // Tooltip on hover
+        // Tooltip on hover (desktop)
         region.addEventListener('mouseenter', (e) => showTooltip(e, tokenId, isOwned));
         region.addEventListener('mouseleave', hideTooltip);
         region.addEventListener('mousemove', moveTooltip);
 
         // Click handler
-        region.addEventListener('click', () => handleRegionClick(tokenId, isOwned));
+        region.addEventListener('click', (e) => {
+            // Prevent click when artwork is zoomed
+            const wrapper = document.getElementById('artwork-wrapper');
+            if (wrapper && wrapper.classList.contains('zoomed')) {
+                e.stopPropagation();
+                return;
+            }
+            handleRegionClick(tokenId, isOwned);
+        });
 
         nftRegionsContainer.appendChild(region);
-    }
+    });
+}
+
+// Mobile zoom functionality
+function initMobileZoom() {
+    const artworkWrapper = document.getElementById('artwork-wrapper');
+    if (!artworkWrapper) return;
+
+    // Only enable on mobile
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    if (!isMobile) return;
+
+    artworkWrapper.addEventListener('click', (e) => {
+        // Don't zoom if clicking on an NFT region
+        if (e.target.classList.contains('nft-region')) return;
+
+        artworkWrapper.classList.toggle('zoomed');
+    });
+
+    // Close zoom on escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && artworkWrapper.classList.contains('zoomed')) {
+            artworkWrapper.classList.remove('zoomed');
+        }
+    });
 }
 
 // Tooltip functions
@@ -382,6 +431,42 @@ function openClaimModal(tokenId) {
     }
 }
 
+// Update progress steps UI
+function updateProgressSteps(step) {
+    const steps = document.querySelectorAll('.progress-step');
+    const connectors = document.querySelectorAll('.progress-connector');
+    const progressTitle = document.getElementById('progress-title');
+    const progressDesc = document.getElementById('progress-description');
+    const broadcastingStatus = document.getElementById('broadcasting-status');
+
+    steps.forEach((stepEl, index) => {
+        stepEl.classList.remove('active', 'completed');
+        if (index < step - 1) {
+            stepEl.classList.add('completed');
+        } else if (index === step - 1) {
+            stepEl.classList.add('active');
+        }
+    });
+
+    connectors.forEach((conn, index) => {
+        conn.classList.remove('active');
+        if (index < step - 1) {
+            conn.classList.add('active');
+        }
+    });
+
+    // Update text based on step
+    if (step === 1) {
+        if (progressTitle) progressTitle.textContent = 'The Guardian is evaluating...';
+        if (progressDesc) progressDesc.textContent = 'Your observation is being assessed for authenticity and depth.';
+        if (broadcastingStatus) broadcastingStatus.style.display = 'none';
+    } else if (step === 2) {
+        if (progressTitle) progressTitle.textContent = 'Broadcasting Transaction...';
+        if (progressDesc) progressDesc.textContent = 'Your observation has been approved! Sending your NFT now.';
+        if (broadcastingStatus) broadcastingStatus.style.display = 'block';
+    }
+}
+
 // Handle submission to Guardian (Gemini AI)
 async function submitToGuardian() {
     const modal = document.getElementById('claim-modal');
@@ -412,10 +497,13 @@ async function submitToGuardian() {
         return;
     }
 
-    // Hide step 1, show step 2 (loading)
+    // Hide step 1, show step 2 (loading with progress)
     document.getElementById('claim-step-1').style.display = 'none';
     document.getElementById('claim-step-2').style.display = 'block';
     claimStatus.style.display = 'none';
+
+    // Update to Step 1: AI Analyzing
+    updateProgressSteps(1);
 
     try {
         // Submit to backend for Gemini AI evaluation
@@ -433,14 +521,13 @@ async function submitToGuardian() {
 
         const result = await response.json();
 
-        // Hide step 2, show step 3 (result)
-        document.getElementById('claim-step-2').style.display = 'none';
-        document.getElementById('claim-step-3').style.display = 'block';
-
         const resultContainer = document.getElementById('guardian-result');
 
         // Handle error responses (400, 500, etc.)
         if (result.error) {
+            // Hide step 2, show step 3 (result)
+            document.getElementById('claim-step-2').style.display = 'none';
+            document.getElementById('claim-step-3').style.display = 'block';
             resultContainer.innerHTML = `
                 <div class="guardian-rejected">
                     <div class="result-icon">⚠️</div>
@@ -455,9 +542,48 @@ async function submitToGuardian() {
         }
 
         if (result.approved) {
-            // Approved by Guardian
+            // Approved by Guardian - update to step 2 (broadcasting)
+            updateProgressSteps(2);
+
+            // Check if this is a "broadcasting" response (optimistic - tx submitted but not confirmed)
+            if (result.broadcasting && result.claimResult) {
+                // Show broadcasting status while tx confirms in background
+                // Hide step 2, show step 3 with pending status
+                document.getElementById('claim-step-2').style.display = 'none';
+                document.getElementById('claim-step-3').style.display = 'block';
+
+                resultContainer.innerHTML = `
+                    <div class="guardian-approved">
+                        <div class="result-icon">🎉</div>
+                        <h3>NFT Claim Submitted!</h3>
+                        <p class="result-message">Your observation has been deemed worthy!</p>
+                        <p class="result-reason">"${result.reason}"</p>
+                        <p class="result-score">Authenticity Score: ${result.score}/10</p>
+                        <div class="tx-info" style="margin-top: 20px; padding: 15px; background: rgba(255, 193, 7, 0.1); border-radius: 8px;">
+                            <p style="margin: 0 0 10px 0; color: #ffc107; font-weight: 600;">Transaction Broadcasting...</p>
+                            <p style="margin: 0; font-size: 12px; color: #888;">
+                                After Patmos #${result.claimResult.tokenId} is being sent to your wallet.
+                                <br>This usually takes 15-30 seconds.
+                            </p>
+                            <a href="${result.claimResult.etherscanUrl}" target="_blank"
+                               style="display: inline-block; margin-top: 10px; color: #ffc107; text-decoration: none;">
+                                Track on Etherscan →
+                            </a>
+                        </div>
+                        <button class="try-again-btn" style="margin-top: 20px;" onclick="closeClaimModal(); location.reload();">
+                            Close
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            // NFT was automatically claimed and confirmed
             if (result.claimed && result.claimResult) {
-                // NFT was automatically claimed and sent!
+                // Hide step 2, show step 3 (result)
+                document.getElementById('claim-step-2').style.display = 'none';
+                document.getElementById('claim-step-3').style.display = 'block';
+
                 resultContainer.innerHTML = `
                     <div class="guardian-approved">
                         <div class="result-icon">🎉</div>
@@ -482,6 +608,9 @@ async function submitToGuardian() {
                 `;
             } else if (result.claimData && result.claimData.manualClaimRequired) {
                 // Automatic claim failed, manual claim needed
+                document.getElementById('claim-step-2').style.display = 'none';
+                document.getElementById('claim-step-3').style.display = 'block';
+
                 resultContainer.innerHTML = `
                     <div class="guardian-approved">
                         <div class="result-icon">✨</div>
@@ -497,6 +626,9 @@ async function submitToGuardian() {
                 `;
             } else {
                 // Legacy flow with signature
+                document.getElementById('claim-step-2').style.display = 'none';
+                document.getElementById('claim-step-3').style.display = 'block';
+
                 resultContainer.innerHTML = `
                     <div class="guardian-approved">
                         <div class="result-icon">✨</div>
@@ -514,6 +646,9 @@ async function submitToGuardian() {
 
         } else {
             // Rejected by Guardian
+            document.getElementById('claim-step-2').style.display = 'none';
+            document.getElementById('claim-step-3').style.display = 'block';
+
             const reasonText = result.reason ? `<p class="result-reason">"${result.reason}"</p>` : '';
             const scoreText = result.score !== undefined ? `<p class="result-score">Score: ${result.score}/10 (minimum 5 required)</p>` : '';
 
@@ -686,6 +821,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (claimOpenseaBtn) {
         claimOpenseaBtn.addEventListener('click', handleOpenSeaClick);
     }
+
+    // Initialize mobile zoom
+    initMobileZoom();
 
     // Fetch ownership and create grid
     console.log('Fetching NFT ownership data...');

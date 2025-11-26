@@ -287,6 +287,57 @@ contract AfterPatmosClaimer is Ownable, ReentrancyGuard, IERC721Receiver {
         emit NFTClaimed(recipient, tokenId, observation, block.timestamp);
     }
 
+    // ============ Owner Observation Functions ============
+
+    /**
+     * @notice Allow an NFT owner to add an observation for their token
+     * @dev Verifies ownership via the NFT contract. Emits same NFTClaimed event.
+     * @param tokenId The token ID owned by the caller
+     * @param observation The observation text (1-250 characters)
+     */
+    function addObservation(
+        uint256 tokenId,
+        string calldata observation
+    ) external nonReentrant {
+        // Verify caller owns the NFT
+        require(nftContract.ownerOf(tokenId) == msg.sender, "Not token owner");
+
+        // Validate observation length
+        bytes memory obsBytes = bytes(observation);
+        if (obsBytes.length < 1) revert ObservationTooShort();
+        if (obsBytes.length > 250) revert ObservationTooLong();
+
+        // Emit event with observation (same event as claim for consistency)
+        emit NFTClaimed(msg.sender, tokenId, observation, block.timestamp);
+    }
+
+    /**
+     * @notice Relay observation for an NFT owner (gasless)
+     * @dev Only signer can call. Verifies ownership before emitting.
+     * @param owner The address that owns the NFT
+     * @param tokenId The token ID
+     * @param observation The observation text
+     */
+    function relayAddObservation(
+        address owner,
+        uint256 tokenId,
+        string calldata observation
+    ) external nonReentrant {
+        // Only signer (backend) can relay
+        require(msg.sender == signer, "Only signer can relay");
+
+        // Verify the owner actually owns the NFT
+        require(nftContract.ownerOf(tokenId) == owner, "Not token owner");
+
+        // Validate observation length
+        bytes memory obsBytes = bytes(observation);
+        if (obsBytes.length < 1) revert ObservationTooShort();
+        if (obsBytes.length > 250) revert ObservationTooLong();
+
+        // Emit event with observation
+        emit NFTClaimed(owner, tokenId, observation, block.timestamp);
+    }
+
     // ============ Admin Functions ============
 
     /**

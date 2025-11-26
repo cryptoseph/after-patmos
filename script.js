@@ -56,7 +56,7 @@ buildGridMapping();
 // =============================================================================
 
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes in milliseconds
-const OWNERSHIP_CACHE_TTL = 12 * 60 * 60 * 1000; // 12 hours for ownership data
+const OWNERSHIP_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for ownership data
 
 /**
  * Generic fetch wrapper with localStorage caching and TTL
@@ -545,6 +545,10 @@ async function submitToGuardian() {
             // Approved by Guardian - update to step 2 (broadcasting)
             updateProgressSteps(2);
 
+            // Invalidate ownership cache so next load shows updated state
+            invalidateCache('ownership_cache');
+            localStorage.removeItem('afterpatmos_ownership_cache');
+
             // Check if this is a "broadcasting" response (optimistic - tx submitted but not confirmed)
             if (result.broadcasting && result.claimResult) {
                 // Show broadcasting status while tx confirms in background
@@ -755,6 +759,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         videoContainer.classList.add('active');
     }
 
+    // Unmute button
+    const unmuteButton = document.getElementById('unmute-button');
+    if (unmuteButton && promoVideo) {
+        unmuteButton.addEventListener('click', () => {
+            if (promoVideo.muted) {
+                promoVideo.muted = false;
+                unmuteButton.textContent = '🔊 Sound On';
+                unmuteButton.classList.add('unmuted');
+            } else {
+                promoVideo.muted = true;
+                unmuteButton.textContent = '🔇 Tap for Sound';
+                unmuteButton.classList.remove('unmuted');
+            }
+        });
+    }
+
     // Skip video button
     if (skipButton) {
         skipButton.addEventListener('click', () => {
@@ -762,6 +782,34 @@ document.addEventListener('DOMContentLoaded', async () => {
             videoContainer.classList.remove('active');
             artworkContainer.classList.add('active');
             sessionStorage.setItem('afterPatmosVideoWatched', 'true');
+        });
+    }
+
+    // Back to video button (in header on artwork page)
+    const backToVideoBtn = document.getElementById('back-to-video-btn');
+    const backToArtworkBtn = document.getElementById('back-to-artwork-btn');
+
+    if (backToVideoBtn) {
+        backToVideoBtn.addEventListener('click', () => {
+            artworkContainer.classList.remove('active');
+            videoContainer.style.display = '';
+            videoContainer.classList.add('active');
+            // Show "Back to Artwork" button, hide "Skip to Artwork" button
+            if (skipButton) skipButton.style.display = 'none';
+            if (backToArtworkBtn) backToArtworkBtn.style.display = '';
+            if (promoVideo) {
+                promoVideo.currentTime = 0;
+                promoVideo.play();
+            }
+        });
+    }
+
+    // Back to artwork button (in video container, shown when returning to video)
+    if (backToArtworkBtn) {
+        backToArtworkBtn.addEventListener('click', () => {
+            promoVideo.pause();
+            videoContainer.classList.remove('active');
+            artworkContainer.classList.add('active');
         });
     }
 

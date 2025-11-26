@@ -41,10 +41,9 @@ body {
     height: auto;
 }
 
-#skip-button {
+.video-control-btn {
     position: absolute;
     bottom: 40px;
-    right: 40px;
     padding: 12px 24px;
     background-color: rgba(255, 255, 255, 0.1);
     color: #fff;
@@ -57,10 +56,33 @@ body {
     backdrop-filter: blur(10px);
 }
 
-#skip-button:hover {
+.video-control-btn:hover {
     background-color: rgba(255, 255, 255, 0.2);
     border-color: rgba(255, 255, 255, 0.5);
     transform: translateY(-2px);
+}
+
+#unmute-button {
+    left: 40px;
+}
+
+#unmute-button.unmuted {
+    background-color: rgba(76, 175, 80, 0.3);
+    border-color: rgba(76, 175, 80, 0.6);
+}
+
+#skip-button {
+    right: 40px;
+}
+
+#skip-button:hover,
+#back-to-artwork-btn:hover {
+    background-color: rgba(76, 175, 80, 0.3);
+    border-color: rgba(76, 175, 80, 0.6);
+}
+
+#back-to-artwork-btn {
+    right: 40px;
 }
 
 /* Artwork Container */
@@ -230,18 +252,45 @@ body {
 }
 
 /* Logo */
-/* Header */
+/* Header - 3 column layout */
 #site-header {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
+    justify-content: space-between;
     padding: 15px 20px 10px 20px;
     position: relative;
     gap: 15px;
 }
 
+.header-left {
+    flex: 1;
+    display: flex;
+    justify-content: flex-start;
+}
+
 #logo-container {
+    flex: 0 0 auto;
     text-align: center;
+}
+
+.wallet-container {
+    flex: 1;
+    justify-content: flex-end;
+}
+
+/* Back to Video Button */
+.back-video-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    font-size: 13px;
+}
+
+.back-video-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: translateY(-2px);
 }
 
 #logo-container a {
@@ -1607,17 +1656,27 @@ body {
         max-width: 180px;
     }
 
-    /* Mobile header - stack on small screens */
+    /* Mobile header - keep row but adjust spacing */
     #site-header {
-        flex-direction: column;
+        flex-direction: row;
         align-items: center;
         padding: 10px 15px;
+        gap: 8px;
+    }
+
+    .header-left {
+        flex: 0 0 auto;
+    }
+
+    .back-video-btn {
+        padding: 6px 10px;
+        font-size: 11px;
     }
 
     .wallet-container {
         gap: 6px;
         flex-wrap: wrap;
-        justify-content: center;
+        justify-content: flex-end;
     }
 
     .header-btn {

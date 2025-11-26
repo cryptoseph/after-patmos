@@ -1,0 +1,46 @@
+# Environment files (NEVER commit these - contains private keys!)
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+backend/node_modules/
+contracts/lib/
+
+# Build artifacts
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+
+# OS files
+.DS_Store
+*.swp
+*.swo
+*~
+
+# IDE
+.idea/
+.vscode/
+*.sublime-*
+
+# Large media files (excluded to avoid GitHub upload issues)
+*.mp4
+*.mov
+*.MOV
+
+# NFT piece images (available on OpenSea/Arweave, too large for GitHub)
+pieces/
+*.jpg
+AfterPatmos1o1.jpg
+
+# Claude Code
+.claude/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary files
+tmp/
+temp/

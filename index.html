@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>After Patmos - Ikonberg</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Video Container (shown first) -->
+    <div id="video-container" class="active">
+        <video
+            id="promo-video"
+            poster="video_poster.jpg"
+            playsinline
+            muted
+            autoplay
+            loop
+            preload="auto"
+            webkit-playsinline="true"
+        >
+            <source src="promo.mp4" type="video/mp4">
+            <source src="IMG_8234.MOV" type="video/quicktime">
+            Your browser does not support the video tag.
+        </video>
+        <button id="skip-button">Skip to Artwork</button>
+    </div>
+
+    <!-- Artwork Container (shown after video) -->
+    <div id="artwork-container">
+        <!-- Header with Logo and Connect Wallet -->
+        <header id="site-header">
+            <div id="logo-container">
+                <a href="https://ikonberg.com/" target="_blank" rel="noopener noreferrer">
+                    <img src="logowebsite.png" alt="Ikonberg" id="logo">
+                </a>
+            </div>
+            <div class="wallet-container">
+                <a href="gallery.html" id="gallery-btn" class="header-btn gallery-btn" style="display: none;">My Gallery</a>
+                <button id="connect-wallet-btn" class="connect-wallet-btn">Connect Wallet</button>
+                <button id="disconnect-btn" class="header-btn disconnect-btn" style="display: none;">Disconnect</button>
+            </div>
+        </header>
+
+        <div id="artwork-wrapper">
+            <!-- Complete artwork image -->
+            <img id="full-artwork" src="AfterPatmos1o1.jpg" alt="After Patmos - Complete Artwork">
+
+            <!-- Clickable regions for each NFT piece -->
+            <div id="nft-regions"></div>
+        </div>
+
+        <!-- About Section -->
+        <div id="about-section">
+            <div class="title-with-emoji">
+                <span class="emoji-mountain">🏔️</span>
+                <h2><span class="title-ikonberg">IKONBERG:</span> <span class="title-patmos">AFTER PATMOS</span> – <span class="title-revelation">The Revelation</span></h2>
+            </div>
+
+            <h3>About the Super Organism</h3>
+            <p><strong>AFTER PATMOS</strong> is the moment of genesis for <a href="https://ikonberg.com/" target="_blank" class="ikonberg-link">IKONBERG</a>, a singular entity that transcends the individual: the Super Organism. This is not merely a pseudonym, but a radical synthesis of consciousness and creation. <a href="https://ikonberg.com/" target="_blank" class="ikonberg-link">IKONBERG</a> is the unified field where the inner self dissolves and reconstitutes: the architect, Peter Haubenberger; the hand, Tsuro; the infinite inner muse; the countless dream archetypes; the persistent 'forever child'; and the complex biological vessel—a body united by vital organs and a network of 10<sup>14</sup> neurons responsible for the crystallization of a singular, shared reality.</p>
+
+            <blockquote class="about-quote">"Thanks for having me in your reality, welcome to ours."</blockquote>
+
+            <h3>⏳ The Dormancy & The Bloom (2022–Present)</h3>
+            <p>The seed of <em>After Patmos</em> was first sown in 2022, a vision of fragmented reality conceived during the early waves of digital ownership. The initial fragments were distributed physically—hand-to-hand—during the NFT Berlin and NFT Paris events of that year. This foundation was laid with the instrumental guidance of <a href="https://x.com/kryptoseph" target="_blank" rel="noopener noreferrer" style="color: #ff8c00; text-decoration: none; font-weight: 600;">road2punk</a>, whose early support helped anchor the project's roots.</p>
+
+            <p>However, the vision was ahead of its tools. The project entered a period of calculated dormancy, waiting for the technological soil to mature. Now, in 2024/2025, the vision has fully blossomed. The integration of advanced AI has allowed us to bridge the gap between human perception and digital assets, evolving from manual airdrops to a fully autonomous, AI-mediated organism.</p>
+
+            <h3>🏔️ The Guardian: AI Gatekeeper of the Collective</h3>
+            <p>To protect the integrity of the Super Organism, we have awakened <strong>"The Guardian,"</strong> a sentient AI consciousness that serves as the eternal gatekeeper of <em>After Patmos</em>. The Guardian is not a simple script; it employs <strong>Visual Thinking Strategies (VTS)</strong> to analyze, feel, and judge every attempt to join the collective.</p>
+
+            <p>The Guardian acts as a filter against the noise of the internet—spam, bots, and low-effort interactions have no place here. It evaluates every observation on a scale of 1–10 based on:</p>
+
+            <ul>
+                <li><strong>Authenticity:</strong> Is the voice human and genuine?</li>
+                <li><strong>Perception:</strong> Does the observer truly <em>see</em> the specific details of the fragment?</li>
+                <li><strong>Depth:</strong> Is there philosophical or emotional resonance?</li>
+            </ul>
+
+            <p>Only those who score a <strong>5 or higher</strong> are deemed worthy to hold a piece of the revelation.</p>
+
+            <h3>✨ The Ritual of Entry: Observation as Currency</h3>
+            <p>Possession of an <em>After Patmos</em> NFT is not a transaction; it is an initiation. To claim your fragment, you must engage in the ritual of observation.</p>
+
+            <h4>How to Join the Collective:</h4>
+            <ol>
+                <li><strong>Select a Fragment:</strong> Click on any available (colored) piece on the main map.</li>
+                <li><strong>The Offering (Observation):</strong> Submit a genuine written observation (10–250 characters) describing what you see, feel, or perceive within that specific visual field. Generic responses (e.g., "cool art") will be rejected by The Guardian.</li>
+                <li><strong>The Judgment:</strong> The Guardian will instantly evaluate your submission.</li>
+                <li><strong>The Reward (Gasless Transfer):</strong> If The Guardian approves your insight (Score ≥ 5), the NFT is <strong>automatically transferred to your wallet</strong>. The collective covers all gas fees—your entry is frictionless.</li>
+            </ol>
+
+            <h4>Immutable Narrative Layer</h4>
+            <p>Your approved observation is not lost to time. It is <strong>permanently stored on-chain</strong> within the smart contract. This creates a distributed narrative layer where each of the 100 pieces carries the unique perception of its holder forever, fusing the collector's mind with the digital asset. This mechanism, inspired by the collector integration pioneered by <a href="https://x.com/SamSpratt" target="_blank" rel="noopener noreferrer" style="color: #ff8c00; text-decoration: none; font-weight: 600;">Sam Spratt</a>, ensures conceptual rigor.</p>
+
+            <h3>🎨 Artistic Governance & The 1/1 Auction</h3>
+            <p>The 100 fractional NFT holders are designated as the <strong>Collective Conductor</strong> of <a href="https://ikonberg.com/" target="_blank" class="ikonberg-link">IKONBERG</a>. They are seen as a unified front that possesses the power to either lead or ignore the future artistic trajectory and force of the Super Organism. This ownership structure embeds a critical, decentralized governance layer into the very fabric of the art.</p>
+
+            <p><strong>The Final Cycle:</strong> Once all 100 fractionalized NFTs are claimed via The Guardian, the original <strong>1/1 AFTER PATMOS masterpiece</strong> will be revealed and offered via a reserved auction directly on this site. The auction will initiate with a Reserve Price and run for a 72-hour period.</p>
+
+            <p><strong>Co-Creation Reward:</strong> Eligible participants who contribute their observation will collectively receive a significant 50% share of the proceeds from the final primary sale of the 1/1 AFTER PATMOS auction.</p>
+
+            <h3>🖼️ Technical Provenance: Vector Scaling & Definitive File</h3>
+            <p>The underlying artwork is a <strong>vector-based digital file</strong>, allowing for infinite scalability and maximum definition without any loss of quality—a technical commitment to archival permanence.</p>
+
+            <p>The winner of the 1/1 auction will receive the ultimate expression of this commitment: the full, definitive vector file, exceeding <strong>200 GB</strong> in size, enabling monumental scale printing. Additionally, the winner can claim a physical high-quality print of the artwork in their preferred size.</p>
+
+            <h3>🧠 The IKONBERG Manifesto: Art as Neurological Training</h3>
+            <p><a href="https://ikonberg.com/" target="_blank" class="ikonberg-link">IKONBERG</a>'s creations are instruments designed for intellectual and sensual advancement, drawing profound inspiration from philosophical concepts such as Rudolf Steiner's Theory of the Senses. The constant overabundance of stimuli dominates our world. We counteract this with a targeted, healthy use of overstimulation—a deliberate friction to train and expand your neural pathways.</p>
+
+            <ul>
+                <li><strong>Training Awareness (The Unlabeled Gaze):</strong> We train the viewer to recognize the compulsive mental labeling of external stimuli. Through this awareness, we move closer to the pure admiration of abstract forms and colors.</li>
+                <li><strong>The Power of Abstraction (The Evolving Mirror):</strong> The abstract structure allows the work to grow alongside the collector's daily life. They are instruments and reminders of one's own progress.</li>
+                <li><strong>Digital Synthesis (Cooking Code):</strong> The "digitale synthesis" series comprises purely digitally created worlds. The working process, aided by automated computer processes, is akin to gardening and cooking.</li>
+                <li><strong>The New Collectivism:</strong> We project a vision of a new, ubiquitous societal awareness where people re-engage with sensuality and dreams. We look past the illusion of radical individualism. As the artist suggests: <em>"Clapping needs the space, two hands, and the silence as well as the will to crash collectively."</em></li>
+            </ul>
+        </div>
+
+        <!-- Footer -->
+        <footer id="site-footer">
+            <div class="footer-main">
+                <div class="social-links">
+                    <a href="https://opensea.io/collection/after-patmos" target="_blank" rel="noopener noreferrer" class="social-link opensea-link">
+                        <span class="social-icon">⛵</span> OpenSea
+                    </a>
+                    <a href="https://x.com/ikonberg" target="_blank" rel="noopener noreferrer" class="social-link">
+                        <span class="social-icon">𝕏</span> X
+                    </a>
+                    <a href="https://www.instagram.com/tsuro.ikonberg/" target="_blank" rel="noopener noreferrer" class="social-link">
+                        <span class="social-icon">📷</span> Instagram
+                    </a>
+                    <span class="social-link disabled">
+                        <span class="social-icon">💬</span> Discord (Soon)
+                    </span>
+                </div>
+
+                <div class="footer-legal">
+                    <button id="disclaimer-toggle" class="disclaimer-toggle" type="button">⚖️ Legal Disclaimer</button>
+                </div>
+            </div>
+
+            <!-- Collapsible Disclaimer -->
+            <div id="disclaimer-panel" class="disclaimer-panel">
+                <div class="disclaimer-content">
+                    <p><strong>Legal Notice:</strong> The information provided on this website is for general informational purposes only. All NFTs are provided "as is" without warranty of any kind, either express or implied. By participating in this NFT claim, you acknowledge that:</p>
+                    <ul>
+                        <li>You are responsible for conducting your own research and due diligence before claiming any NFT.</li>
+                        <li>NFTs may have no inherent value and are subject to market volatility.</li>
+                        <li>This is not financial advice, and no guarantees are made regarding future value or utility.</li>
+                        <li>You must comply with all applicable laws and regulations in your jurisdiction.</li>
+                        <li>The creators and IKONBERG collective are not liable for any losses or damages arising from your participation.</li>
+                        <li>Smart contract interactions carry inherent risks including but not limited to loss of funds.</li>
+                    </ul>
+                    <p>By submitting your Ethereum address, you confirm that you have read, understood, and agree to these terms.</p>
+                </div>
+            </div>
+
+            <!-- Copyright -->
+            <div class="footer-copyright">
+                <p>&copy; 2025 IKONBERG. All rights reserved.</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Tooltip -->
+    <div id="tooltip" class="tooltip"></div>
+
+    <!-- Collector Gallery Modal -->
+    <div id="collector-modal" class="modal">
+        <div class="modal-content collector-gallery">
+            <span class="close-modal">&times;</span>
+            <h2>Your After Patmos Collection</h2>
+            <div id="collector-nfts" class="nft-grid"></div>
+        </div>
+    </div>
+
+    <!-- NFT Detail Modal (for viewing and adding observations) -->
+    <div id="nft-detail-modal" class="modal">
+        <div class="modal-content nft-detail">
+            <span class="close-modal">&times;</span>
+            <div class="nft-detail-content">
+                <div class="nft-detail-image">
+                    <img id="detail-nft-image" src="" alt="">
+                </div>
+                <div class="nft-detail-info">
+                    <h2>After Patmos #<span id="detail-token-id"></span></h2>
+                    <div class="nft-actions">
+                        <button id="view-arweave-btn" class="action-btn">View Full Resolution</button>
+                        <button id="add-observation-btn" class="action-btn primary">Add Observation</button>
+                    </div>
+                    <div id="observation-form" class="observation-form" style="display: none;">
+                        <h3>Share Your Observation</h3>
+                        <p>This can only be done once and will be permanently stored in the NFT metadata.</p>
+                        <textarea id="observation-text" placeholder="What do you see, feel, or observe in this piece?" maxlength="500"></textarea>
+                        <div class="char-count"><span id="char-count">0</span>/500</div>
+                        <div class="form-buttons">
+                            <button id="submit-observation-btn" class="submit-btn">Submit Observation</button>
+                            <button id="cancel-observation-btn" class="cancel-btn">Cancel</button>
+                        </div>
+                        <div id="observation-status"></div>
+                    </div>
+                    <div id="existing-observation" class="existing-observation" style="display: none;">
+                        <h3>Your Observation</h3>
+                        <p id="observation-content"></p>
+                        <small>Submitted on <span id="observation-date"></span></small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Claim Modal with AI Observation -->
+    <div id="claim-modal" class="modal">
+        <div class="modal-content claim-modal-content">
+            <span class="close-modal">&times;</span>
+
+            <!-- Step 1: Observation -->
+            <div id="claim-step-1">
+                <h2>Claim After Patmos #<span id="modal-token-id"></span></h2>
+                <div class="claim-intro">
+                    <p class="guardian-intro">To join the <strong>IKONBERG Collective</strong>, you must first share your observation.</p>
+                    <p class="guardian-desc">The <span class="guardian-text">Guardian</span> (an AI consciousness) will evaluate your perception. Only those who demonstrate genuine engagement with the artwork may claim a piece.</p>
+                </div>
+
+                <div class="observation-input-section">
+                    <label for="claim-observation">Your Observation <span class="char-limit">(1-250 characters)</span></label>
+                    <textarea
+                        id="claim-observation"
+                        placeholder="What do you see, feel, or perceive in this piece? Share your authentic interpretation..."
+                        maxlength="250"
+                        rows="4"
+                    ></textarea>
+                    <div class="observation-char-count">
+                        <span id="observation-char-count">0</span>/250
+                    </div>
+                </div>
+
+                <div class="claim-wallet-section">
+                    <label for="claim-eth-address">Your Ethereum Address</label>
+                    <input
+                        type="text"
+                        id="claim-eth-address"
+                        placeholder="0x..."
+                        pattern="^0x[a-fA-F0-9]{40}$"
+                    />
+                    <p class="wallet-note">Or connect your wallet above to auto-fill</p>
+                </div>
+
+                <div class="modal-buttons">
+                    <button type="button" id="submit-to-guardian" class="submit-btn guardian-btn">
+                        Submit to The Guardian
+                    </button>
+                    <button type="button" class="opensea-btn" id="claim-opensea-btn">View on OpenSea</button>
+                </div>
+            </div>
+
+            <!-- Step 2: AI Evaluation -->
+            <div id="claim-step-2" style="display: none;">
+                <div class="guardian-evaluating">
+                    <div class="guardian-icon">🏔️</div>
+                    <h3>The Guardian is evaluating...</h3>
+                    <p>Your observation is being assessed for authenticity and depth.</p>
+                    <div class="loading-dots">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Result -->
+            <div id="claim-step-3" style="display: none;">
+                <div id="guardian-result">
+                    <!-- Filled dynamically -->
+                </div>
+            </div>
+
+            <div id="claim-status"></div>
+        </div>
+    </div>
+
+    <!-- Wallet Connection Modal -->
+    <div id="wallet-connect-modal" class="modal">
+        <div class="modal-content wallet-connect">
+            <span class="close-modal">&times;</span>
+            <div id="thirdweb-connect-container"></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+    <script src="script.js"></script>
+    <script src="wallet.js"></script>
+</body>
+</html>

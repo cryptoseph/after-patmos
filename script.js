@@ -4,7 +4,7 @@
 
 const NFT_CONTRACT = '0x83e2654994264333e6fdfe2e43eb862866746041';
 const TREASURY_ADDRESS = '0x764d2f2e65153a08c5509235334b08be2ae02915'.toLowerCase();
-const CLAIMER_CONTRACT = '0xB0BF498288dff665e3129f63E1d010F9297205f1'.toLowerCase();
+const CLAIMER_CONTRACT = '0x83FB8FF0eAB0f036c4b3dC301483D571C5573a07'.toLowerCase();
 const OPENSEA_BASE_URL = 'https://opensea.io/assets/ethereum';
 const ALCHEMY_API_URL = 'https://eth-mainnet.g.alchemy.com/nft/v3/demo/getNFTsForOwner';
 

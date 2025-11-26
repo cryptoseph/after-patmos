@@ -4,7 +4,7 @@ A gasless NFT claiming system powered by an AI Guardian that verifies human inte
 
 ## Overview
 
-After Patmos is a unique NFT collection featuring 97 individual pieces. This repository contains the complete claiming infrastructure including:
+After Patmos is a unique NFT collection featuring 100 individual pieces. This repository contains the complete claiming infrastructure including:
 
 - **Frontend**: Interactive grid display with wallet connection and claim flow
 - **Backend**: Relay service with Gemini 2.0 Flash AI Guardian
@@ -34,7 +34,7 @@ After Patmos is a unique NFT collection featuring 97 individual pieces. This rep
 - **AI Guardian**: Gemini 2.0 Flash verifies users are human through natural conversation
 - **IP Rate Limiting**: Blocks IPs after 3 failed Guardian verification attempts
 - **Wallet Integration**: Supports MetaMask and other Web3 wallets
-- **Interactive Grid**: Visual display of all 97 NFT pieces with claim status
+- **Interactive Grid**: Visual display of all 100 NFT pieces with claim status
 
 ## Smart Contract
 

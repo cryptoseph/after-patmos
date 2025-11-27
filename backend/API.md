@@ -107,6 +107,10 @@ Get comprehensive service metrics for monitoring dashboards.
   },
   "rateLimiting": {
     "blockedIPs": 5
+  },
+  "storage": {
+    "type": "redis",
+    "redisConnected": true
   }
 }
 ```
@@ -462,6 +466,8 @@ RateLimit-Reset: 1705312200
 - Added `/api/ready` and `/api/live` health probes
 - Added transaction retry mechanism with exponential backoff
 - Added graceful shutdown handling
+- Added Redis session storage (optional, falls back to in-memory)
+- Added support for Upstash Redis with automatic TLS
 - Improved error handling with typed responses
 - Enhanced Guardian metrics tracking by archetype
 

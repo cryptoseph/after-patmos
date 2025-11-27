@@ -46,6 +46,7 @@ This repository contains the complete claiming infrastructure:
 - **IP Rate Limiting**: IETF Draft-7 rate limiting, blocks IPs after 3 hard rejections
 - **Emergency Pause**: Contract can be paused in case of security issues
 - **Graceful Shutdown**: Backend handles SIGTERM/SIGINT for zero-downtime deployments
+- **Redis Session Storage**: Optional persistent storage for Guardian failures (supports Upstash)
 
 ### Monitoring & Observability
 - **Structured Logging**: JSON format with request tracing for debugging

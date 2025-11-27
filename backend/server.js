@@ -21,6 +21,7 @@ const rateLimit = require('express-rate-limit');
 const { ethers } = require('ethers');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const crypto = require('crypto');
+const Redis = require('ioredis');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -375,61 +376,239 @@ if (process.env.NFT_CONTRACT) {
     nftContract = new ethers.Contract(process.env.NFT_CONTRACT, NFT_ABI, provider);
 }
 
+// ============ REDIS SESSION STORAGE ============
+// Redis client for persistent session storage (Guardian failures, pending claims)
+// Falls back to in-memory storage if Redis is unavailable
+
+let redisClient = null;
+let useRedis = false;
+
+// In-memory fallback storage
+const memoryStorage = {
+    guardianFailures: new Map(),
+    pendingClaimsData: new Map()
+};
+
+/**
+ * Initialize Redis connection
+ */
+async function initializeRedis() {
+    if (!process.env.REDIS_URL) {
+        logger.info('REDIS_URL not configured, using in-memory storage');
+        return false;
+    }
+
+    try {
+        // Parse and configure Redis URL
+        // Upstash requires TLS - convert redis:// to rediss:// if needed
+        let redisUrl = process.env.REDIS_URL;
+
+        // For Upstash URLs, ensure TLS is enabled
+        if (redisUrl.includes('upstash.io') && redisUrl.startsWith('redis://')) {
+            redisUrl = redisUrl.replace('redis://', 'rediss://');
+            logger.info('Converted to TLS connection for Upstash');
+        }
+
+        redisClient = new Redis(redisUrl, {
+            maxRetriesPerRequest: 3,
+            retryDelayOnFailover: 100,
+            enableReadyCheck: true,
+            connectTimeout: 10000,
+            lazyConnect: true,
+            // TLS config for Upstash
+            tls: redisUrl.startsWith('rediss://') ? {} : undefined
+        });
+
+        // Event handlers
+        redisClient.on('connect', () => {
+            logger.info('Redis connected successfully');
+        });
+
+        redisClient.on('error', (err) => {
+            logger.error('Redis connection error', { error: err.message });
+        });
+
+        redisClient.on('close', () => {
+            logger.warn('Redis connection closed');
+        });
+
+        // Test connection
+        await redisClient.connect();
+        await redisClient.ping();
+
+        useRedis = true;
+        logger.info('Redis session storage initialized', {
+            host: redisUrl.split('@')[1]?.split(':')[0] || 'configured'
+        });
+
+        return true;
+    } catch (error) {
+        logger.error('Failed to initialize Redis, falling back to in-memory storage', {
+            error: error.message
+        });
+        redisClient = null;
+        useRedis = false;
+        return false;
+    }
+}
+
 // ============ GUARDIAN FAILURE TRACKING ============
 // Track failed Guardian evaluations per IP (3 strikes = 1 hour block)
-const guardianFailures = new Map(); // IP -> { count, blockedUntil }
+// Uses Redis if available, otherwise falls back to in-memory Map
+
+const GUARDIAN_FAILURE_PREFIX = 'guardian:failure:';
+const GUARDIAN_BLOCK_TTL = 60 * 60; // 1 hour in seconds
 
 function getClientIP(req) {
     return req.ip || req.headers['x-forwarded-for']?.split(',')[0] || req.connection.remoteAddress;
 }
 
-function checkGuardianBlock(ip) {
-    const record = guardianFailures.get(ip);
+/**
+ * Check if IP is blocked due to Guardian failures
+ * @param {string} ip - Client IP address
+ * @returns {Promise<{blocked: boolean, remainingMins?: number, failureCount?: number}>}
+ */
+async function checkGuardianBlock(ip) {
+    if (useRedis && redisClient) {
+        try {
+            const data = await redisClient.get(GUARDIAN_FAILURE_PREFIX + ip);
+            if (!data) return { blocked: false };
+
+            const record = JSON.parse(data);
+
+            // Check if block has expired
+            if (record.blockedUntil && Date.now() < record.blockedUntil) {
+                const remainingMs = record.blockedUntil - Date.now();
+                const remainingMins = Math.ceil(remainingMs / 60000);
+                return { blocked: true, remainingMins };
+            }
+
+            // Block expired, delete key
+            if (record.blockedUntil && Date.now() >= record.blockedUntil) {
+                await redisClient.del(GUARDIAN_FAILURE_PREFIX + ip);
+                return { blocked: false };
+            }
+
+            return { blocked: false, failureCount: record.count };
+        } catch (error) {
+            logger.error('Redis checkGuardianBlock error', { error: error.message, ip });
+            // Fall through to memory check
+        }
+    }
+
+    // In-memory fallback
+    const record = memoryStorage.guardianFailures.get(ip);
     if (!record) return { blocked: false };
 
-    // Check if block has expired
     if (record.blockedUntil && Date.now() < record.blockedUntil) {
         const remainingMs = record.blockedUntil - Date.now();
         const remainingMins = Math.ceil(remainingMs / 60000);
         return { blocked: true, remainingMins };
     }
 
-    // Block expired, reset
     if (record.blockedUntil && Date.now() >= record.blockedUntil) {
-        guardianFailures.delete(ip);
+        memoryStorage.guardianFailures.delete(ip);
         return { blocked: false };
     }
 
     return { blocked: false, failureCount: record.count };
 }
 
-function recordGuardianFailure(ip) {
-    const record = guardianFailures.get(ip) || { count: 0, blockedUntil: null };
-    record.count++;
+/**
+ * Record a Guardian failure for an IP
+ * @param {string} ip - Client IP address
+ * @returns {Promise<{count: number, blockedUntil: number|null}>}
+ */
+async function recordGuardianFailure(ip) {
+    let record = { count: 0, blockedUntil: null };
 
-    if (record.count >= 3) {
-        // Block for 1 hour after 3 failures
-        record.blockedUntil = Date.now() + (60 * 60 * 1000);
+    if (useRedis && redisClient) {
+        try {
+            const existing = await redisClient.get(GUARDIAN_FAILURE_PREFIX + ip);
+            if (existing) {
+                record = JSON.parse(existing);
+            }
+
+            record.count++;
+
+            if (record.count >= 3) {
+                record.blockedUntil = Date.now() + (60 * 60 * 1000);
+                logger.warn('IP blocked after 3 failed Guardian attempts', {
+                    ip,
+                    blockDuration: '1 hour',
+                    failureCount: record.count,
+                    storage: 'redis'
+                });
+            }
+
+            // Set with TTL to auto-expire
+            await redisClient.setex(
+                GUARDIAN_FAILURE_PREFIX + ip,
+                GUARDIAN_BLOCK_TTL,
+                JSON.stringify(record)
+            );
+
+            return record;
+        } catch (error) {
+            logger.error('Redis recordGuardianFailure error', { error: error.message, ip });
+            // Fall through to memory storage
+        }
+    }
+
+    // In-memory fallback
+    const memRecord = memoryStorage.guardianFailures.get(ip) || { count: 0, blockedUntil: null };
+    memRecord.count++;
+
+    if (memRecord.count >= 3) {
+        memRecord.blockedUntil = Date.now() + (60 * 60 * 1000);
         logger.warn('IP blocked after 3 failed Guardian attempts', {
             ip,
             blockDuration: '1 hour',
-            failureCount: record.count
+            failureCount: memRecord.count,
+            storage: 'memory'
         });
     }
 
-    guardianFailures.set(ip, record);
-    return record;
+    memoryStorage.guardianFailures.set(ip, memRecord);
+    return memRecord;
 }
 
-function resetGuardianFailures(ip) {
-    guardianFailures.delete(ip);
+/**
+ * Reset Guardian failures for an IP (on successful claim)
+ * @param {string} ip - Client IP address
+ */
+async function resetGuardianFailures(ip) {
+    if (useRedis && redisClient) {
+        try {
+            await redisClient.del(GUARDIAN_FAILURE_PREFIX + ip);
+            return;
+        } catch (error) {
+            logger.error('Redis resetGuardianFailures error', { error: error.message, ip });
+        }
+    }
+
+    // In-memory fallback
+    memoryStorage.guardianFailures.delete(ip);
+}
+
+/**
+ * Get count of currently tracked IPs (for metrics)
+ * @returns {Promise<number>}
+ */
+async function getBlockedIPCount() {
+    if (useRedis && redisClient) {
+        try {
+            const keys = await redisClient.keys(GUARDIAN_FAILURE_PREFIX + '*');
+            return keys.length;
+        } catch (error) {
+            logger.error('Redis getBlockedIPCount error', { error: error.message });
+        }
+    }
+    return memoryStorage.guardianFailures.size;
 }
 
 // Initialize Gemini AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-// Store pending claims (in production, use Redis or a database)
-const pendingClaims = new Map();
 
 // ============ PHASE 2: AI GUARDIAN - COGNITIVE FIREWALL ============
 
@@ -873,9 +1052,9 @@ app.post('/api/submit-observation', async (req, res) => {
         const clientIP = getClientIP(req);
 
         // Check if IP is blocked due to failed Guardian attempts
-        const blockStatus = checkGuardianBlock(clientIP);
+        const blockStatus = await checkGuardianBlock(clientIP);
         if (blockStatus.blocked) {
-            console.log(`[Guardian] Blocked IP ${clientIP} attempted claim (${blockStatus.remainingMins} mins remaining)`);
+            logger.info('Blocked IP attempted claim', { ip: clientIP, remainingMins: blockStatus.remainingMins });
             return res.status(429).json({
                 error: `The Guardian requires patience. You have been temporarily blocked after 3 failed attempts. Try again in ${blockStatus.remainingMins} minute${blockStatus.remainingMins !== 1 ? 's' : ''}.`,
                 blocked: true,
@@ -989,7 +1168,7 @@ app.post('/api/submit-observation', async (req, res) => {
 
             // Hard rejection - record failure and check if IP should be blocked
             metrics.guardian.hardRejects++;
-            const failureRecord = recordGuardianFailure(clientIP);
+            const failureRecord = await recordGuardianFailure(clientIP);
             const attemptsRemaining = 3 - failureRecord.count;
 
             logger.info('Guardian hard rejection', {
@@ -1018,7 +1197,7 @@ app.post('/api/submit-observation', async (req, res) => {
 
         // Success - reset failure count for this IP
         metrics.guardian.approvals++;
-        resetGuardianFailures(clientIP);
+        await resetGuardianFailures(clientIP);
 
         // Execute relay claim (optimistic - returns immediately with tx hash)
         logger.info('Guardian approved - executing relay claim', {
@@ -1221,7 +1400,11 @@ app.get('/api/metrics', async (req, res) => {
                     : 0
             },
             rateLimiting: {
-                blockedIPs: guardianFailures.size
+                blockedIPs: await getBlockedIPCount()
+            },
+            storage: {
+                type: useRedis ? 'redis' : 'memory',
+                redisConnected: useRedis && redisClient ? true : false
             }
         });
     } catch (error) {
@@ -1317,16 +1500,26 @@ app.use((req, res) => {
 let server;
 const activeConnections = new Set();
 
-function gracefulShutdown(signal) {
+async function gracefulShutdown(signal) {
     logger.info(`Received ${signal}. Starting graceful shutdown...`);
 
     // Stop accepting new connections
-    server.close(() => {
+    server.close(async () => {
         logger.info('HTTP server closed');
 
         // Close active connections
         for (const conn of activeConnections) {
             conn.destroy();
+        }
+
+        // Close Redis connection if active
+        if (redisClient) {
+            try {
+                await redisClient.quit();
+                logger.info('Redis connection closed');
+            } catch (err) {
+                logger.warn('Error closing Redis connection', { error: err.message });
+            }
         }
 
         logger.info('All connections closed. Exiting process.');
@@ -1342,16 +1535,23 @@ function gracefulShutdown(signal) {
 
 // ============ SERVER START ============
 
-server = app.listen(PORT, () => {
-    logger.info('Server started', {
-        port: PORT,
-        signer: signer.address,
-        claimerContract: process.env.CLAIMER_CONTRACT || 'not configured',
-        nftContract: process.env.NFT_CONTRACT || 'not configured',
-        environment: process.env.NODE_ENV || 'development'
-    });
+async function startServer() {
+    // Initialize Redis (non-blocking - falls back to in-memory if unavailable)
+    await initializeRedis();
 
-    console.log(`
+    server = app.listen(PORT, () => {
+        logger.info('Server started', {
+            port: PORT,
+            signer: signer.address,
+            claimerContract: process.env.CLAIMER_CONTRACT || 'not configured',
+            nftContract: process.env.NFT_CONTRACT || 'not configured',
+            environment: process.env.NODE_ENV || 'development',
+            sessionStorage: useRedis ? 'redis' : 'memory'
+        });
+
+        const storageInfo = useRedis ? 'Redis (persistent)' : 'Memory (ephemeral)';
+
+        console.log(`
 ╔════════════════════════════════════════════════════════════════╗
 ║                                                                ║
 ║   🏔️  IKONBERG After Patmos Claim Service v3.0                 ║
@@ -1366,18 +1566,26 @@ server = app.listen(PORT, () => {
 ║   ├─ Structured Logging: JSON format with request tracing     ║
 ║   ├─ Transaction Retry: Exponential backoff (3 attempts)      ║
 ║   ├─ Monitoring: /api/metrics, /api/ready, /api/live          ║
+║   ├─ Session Storage: ${storageInfo.padEnd(28)}    ║
 ║   └─ Graceful Shutdown: Signal handling (SIGTERM/SIGINT)      ║
 ║                                                                ║
 ║   The Guardian awaits your observations...                     ║
 ║                                                                ║
 ╚════════════════════════════════════════════════════════════════╝
-    `);
-});
+        `);
+    });
 
-// Track active connections for graceful shutdown
-server.on('connection', (conn) => {
-    activeConnections.add(conn);
-    conn.on('close', () => activeConnections.delete(conn));
+    // Track active connections for graceful shutdown
+    server.on('connection', (conn) => {
+        activeConnections.add(conn);
+        conn.on('close', () => activeConnections.delete(conn));
+    });
+}
+
+// Start the server
+startServer().catch((error) => {
+    logger.error('Failed to start server', { error: error.message });
+    process.exit(1);
 });
 
 // Register shutdown handlers

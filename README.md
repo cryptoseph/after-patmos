@@ -43,12 +43,19 @@ This repository contains the complete claiming infrastructure:
 - **Wallet Integration**: Supports MetaMask and other Web3 wallets
 - **Interactive Grid**: Visual display of all 100 NFT pieces with claim status
 
-## Smart Contract
+## Smart Contracts
 
-**AfterPatmosClaimer** - Deployed on Ethereum Mainnet
+Deployed on **Ethereum Mainnet**:
 
+| Contract | Address | Etherscan |
+|----------|---------|-----------|
+| After Patmos NFT (ERC-721) | `0x83e2654994264333e6FdfE2E43eb862866746041` | [View](https://etherscan.io/address/0x83e2654994264333e6FdfE2E43eb862866746041) |
+| AfterPatmosClaimer | `0x83FB8FF0eAB0f036c4b3dC301483D571C5573a07` | [View](https://etherscan.io/address/0x83FB8FF0eAB0f036c4b3dC301483D571C5573a07) |
+
+**AfterPatmosClaimer Features:**
 - Allows whitelisted relayer to claim NFTs on behalf of users
 - One claim per wallet address
+- Stores observations on-chain
 - Owner can withdraw ETH and manage relayer permissions
 
 ## Project Structure

@@ -27,7 +27,7 @@ interface IBatchTransfer {
 contract BatchTransferToClaimer is Script {
     // Contract addresses
     address constant NFT_CONTRACT = 0x83e2654994264333e6FdfE2E43eb862866746041;
-    address constant CLAIMER_CONTRACT = 0xB0BF498288dff665e3129f63E1d010F9297205f1;
+    address constant CLAIMER_CONTRACT = 0x83FB8FF0eAB0f036c4b3dC301483D571C5573a07;
     address constant TREASURY = 0x764D2F2e65153A08C5509235334B08Be2ae02915;
 
     // Token IDs to transfer (66 tokens, excluding #46)

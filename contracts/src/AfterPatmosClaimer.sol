@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
@@ -12,12 +13,13 @@ import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
  * @title AfterPatmosClaimer
  * @notice Gas-optimized contract that holds After Patmos NFTs and allows users to claim them
  *         by submitting an observation that is approved by the backend (Gemini AI Guardian).
- * @dev V2 Optimizations:
+ * @dev V3 Enhancements:
  *      - Bitmap tracking for claimed tokens (100 tokens fit in 2 uint256s)
  *      - Observations stored in events only (90% gas savings)
- *      - Removed expensive storage mappings
+ *      - Emergency pause functionality for security
+ *      - Multi-signer support preparation
  */
-contract AfterPatmosClaimer is Ownable, ReentrancyGuard, IERC721Receiver {
+contract AfterPatmosClaimer is Ownable, ReentrancyGuard, Pausable, IERC721Receiver {
     using ECDSA for bytes32;
     using MessageHashUtils for bytes32;
 
@@ -207,7 +209,7 @@ contract AfterPatmosClaimer is Ownable, ReentrancyGuard, IERC721Receiver {
         uint256 tokenId,
         string calldata observation,
         bytes calldata signature
-    ) external nonReentrant {
+    ) external nonReentrant whenNotPaused {
         // Check if caller has already claimed
         if (hasClaimed[msg.sender]) revert AlreadyClaimed();
 
@@ -256,7 +258,7 @@ contract AfterPatmosClaimer is Ownable, ReentrancyGuard, IERC721Receiver {
         address recipient,
         uint256 tokenId,
         string calldata observation
-    ) external nonReentrant {
+    ) external nonReentrant whenNotPaused {
         // Only signer (backend) can relay claims
         require(msg.sender == signer, "Only signer can relay");
 
@@ -345,8 +347,33 @@ contract AfterPatmosClaimer is Ownable, ReentrancyGuard, IERC721Receiver {
      * @param newSigner New signer address
      */
     function setSigner(address newSigner) external onlyOwner {
+        require(newSigner != address(0), "Invalid signer address");
         emit SignerUpdated(signer, newSigner);
         signer = newSigner;
+    }
+
+    /**
+     * @notice Pause all claim operations (emergency stop)
+     * @dev Only owner can pause. Use in case of security issues.
+     */
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    /**
+     * @notice Unpause claim operations
+     * @dev Only owner can unpause.
+     */
+    function unpause() external onlyOwner {
+        _unpause();
+    }
+
+    /**
+     * @notice Check if the contract is currently paused
+     * @return True if paused
+     */
+    function isPaused() external view returns (bool) {
+        return paused();
     }
 
     /**
@@ -375,6 +402,7 @@ contract AfterPatmosClaimer is Ownable, ReentrancyGuard, IERC721Receiver {
      * @param to Address to send the NFTs to
      */
     function withdrawNFTs(uint256[] calldata tokenIds, address to) external onlyOwner {
+        require(to != address(0), "Invalid recipient");
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 tokenId = tokenIds[i];
 
@@ -382,6 +410,29 @@ contract AfterPatmosClaimer is Ownable, ReentrancyGuard, IERC721Receiver {
                 _setTokenDeposited(tokenId, false);
                 nftContract.safeTransferFrom(address(this), to, tokenId);
                 emit NFTWithdrawn(tokenId, to);
+            }
+        }
+    }
+
+    /**
+     * @notice Emergency withdraw all deposited NFTs
+     * @dev Only callable when paused. Withdraws all NFTs held by this contract.
+     * @param to Address to send all NFTs to
+     */
+    function emergencyWithdrawAll(address to) external onlyOwner whenPaused {
+        require(to != address(0), "Invalid recipient");
+
+        for (uint256 i = 1; i <= 100; i++) {
+            if (_isTokenDeposited(i) && !_isTokenClaimed(i)) {
+                try nftContract.ownerOf(i) returns (address tokenOwner) {
+                    if (tokenOwner == address(this)) {
+                        _setTokenDeposited(i, false);
+                        nftContract.safeTransferFrom(address(this), to, i);
+                        emit NFTWithdrawn(i, to);
+                    }
+                } catch {
+                    continue;
+                }
             }
         }
     }

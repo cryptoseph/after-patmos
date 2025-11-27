@@ -1,11 +1,16 @@
 /**
- * After Patmos Claim Backend Service
+ * After Patmos Claim Backend Service v3.0
  *
  * Security-hardened backend with:
  * - Web3-specific Content Security Policy (CSP)
  * - IETF Draft-7 Rate Limiting
  * - Visual Thinking Strategies (VTS) AI Guardian
  * - Gasless relay claims
+ * - Structured logging with request tracing
+ * - Graceful shutdown handling
+ * - Environment validation
+ * - Transaction retry mechanism
+ * - Comprehensive monitoring endpoints
  */
 
 require('dotenv').config();
@@ -15,9 +20,163 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { ethers } = require('ethers');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// ============ STRUCTURED LOGGING ============
+
+const LogLevel = {
+    DEBUG: 0,
+    INFO: 1,
+    WARN: 2,
+    ERROR: 3
+};
+
+const currentLogLevel = LogLevel[process.env.LOG_LEVEL?.toUpperCase()] ?? LogLevel.INFO;
+
+/**
+ * Structured logger with request tracing
+ */
+const logger = {
+    _format(level, message, meta = {}) {
+        const timestamp = new Date().toISOString();
+        const logEntry = {
+            timestamp,
+            level,
+            message,
+            ...meta,
+            service: 'after-patmos-backend',
+            version: '3.0.0'
+        };
+        return JSON.stringify(logEntry);
+    },
+
+    debug(message, meta) {
+        if (currentLogLevel <= LogLevel.DEBUG) {
+            console.log(this._format('DEBUG', message, meta));
+        }
+    },
+
+    info(message, meta) {
+        if (currentLogLevel <= LogLevel.INFO) {
+            console.log(this._format('INFO', message, meta));
+        }
+    },
+
+    warn(message, meta) {
+        if (currentLogLevel <= LogLevel.WARN) {
+            console.warn(this._format('WARN', message, meta));
+        }
+    },
+
+    error(message, meta) {
+        if (currentLogLevel <= LogLevel.ERROR) {
+            console.error(this._format('ERROR', message, meta));
+        }
+    }
+};
+
+// ============ ENVIRONMENT VALIDATION ============
+
+const requiredEnvVars = [
+    'GEMINI_API_KEY',
+    'PRIVATE_KEY',
+    'RPC_URL'
+];
+
+const optionalEnvVars = [
+    'CLAIMER_CONTRACT',
+    'NFT_CONTRACT',
+    'FRONTEND_URL',
+    'PORT',
+    'LOG_LEVEL',
+    'REDIS_URL'
+];
+
+function validateEnvironment() {
+    const missing = requiredEnvVars.filter(key => !process.env[key]);
+    if (missing.length > 0) {
+        logger.error('Missing required environment variables', { missing });
+        throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+    }
+
+    // Validate private key format
+    const pk = process.env.PRIVATE_KEY;
+    if (!pk.match(/^(0x)?[a-fA-F0-9]{64}$/)) {
+        logger.error('Invalid PRIVATE_KEY format');
+        throw new Error('PRIVATE_KEY must be a valid 64-character hex string');
+    }
+
+    // Validate RPC URL format
+    try {
+        new URL(process.env.RPC_URL);
+    } catch (e) {
+        logger.error('Invalid RPC_URL format', { url: process.env.RPC_URL });
+        throw new Error('RPC_URL must be a valid URL');
+    }
+
+    logger.info('Environment validation passed', {
+        configured: [...requiredEnvVars, ...optionalEnvVars.filter(k => process.env[k])]
+    });
+}
+
+// Validate environment on startup
+validateEnvironment();
+
+// ============ METRICS & MONITORING ============
+
+const metrics = {
+    startTime: Date.now(),
+    requests: {
+        total: 0,
+        successful: 0,
+        failed: 0,
+        byEndpoint: {}
+    },
+    guardian: {
+        evaluations: 0,
+        approvals: 0,
+        softRejects: 0,
+        hardRejects: 0,
+        errors: 0,
+        averageScore: 0,
+        scoreSum: 0,
+        byArchetype: {}
+    },
+    claims: {
+        attempted: 0,
+        successful: 0,
+        failed: 0,
+        gasUsed: 0n,
+        averageGas: 0
+    },
+    blockchain: {
+        txSubmitted: 0,
+        txConfirmed: 0,
+        txFailed: 0,
+        lastBlockChecked: 0
+    }
+};
+
+function recordMetric(category, metric, value = 1) {
+    if (metrics[category] && typeof metrics[category][metric] === 'number') {
+        metrics[category][metric] += value;
+    }
+}
+
+function recordEndpointMetric(endpoint, success) {
+    if (!metrics.requests.byEndpoint[endpoint]) {
+        metrics.requests.byEndpoint[endpoint] = { total: 0, successful: 0, failed: 0 };
+    }
+    metrics.requests.byEndpoint[endpoint].total++;
+    if (success) {
+        metrics.requests.byEndpoint[endpoint].successful++;
+    } else {
+        metrics.requests.byEndpoint[endpoint].failed++;
+    }
+}
 
 // ============ PHASE 1: SECURITY HARDENING ============
 
@@ -103,6 +262,53 @@ app.use(cors({
 
 // Body parser
 app.use(express.json({ limit: '10kb' }));  // Limit body size for security
+
+// ============ REQUEST TRACING MIDDLEWARE ============
+
+app.use((req, res, next) => {
+    // Generate unique request ID for tracing
+    req.requestId = crypto.randomUUID();
+    req.startTime = Date.now();
+
+    // Track metrics
+    metrics.requests.total++;
+
+    // Log incoming request
+    logger.debug('Incoming request', {
+        requestId: req.requestId,
+        method: req.method,
+        path: req.path,
+        ip: getClientIP(req),
+        userAgent: req.headers['user-agent']?.slice(0, 100)
+    });
+
+    // Capture response
+    const originalSend = res.send;
+    res.send = function(body) {
+        const duration = Date.now() - req.startTime;
+        const success = res.statusCode < 400;
+
+        if (success) {
+            metrics.requests.successful++;
+        } else {
+            metrics.requests.failed++;
+        }
+        recordEndpointMetric(req.path, success);
+
+        logger.info('Request completed', {
+            requestId: req.requestId,
+            method: req.method,
+            path: req.path,
+            statusCode: res.statusCode,
+            duration: `${duration}ms`,
+            success
+        });
+
+        return originalSend.call(this, body);
+    };
+
+    next();
+});
 
 // Volumetric Security - IETF Draft-7 Rate Limiting
 const apiLimiter = rateLimit({
@@ -204,7 +410,11 @@ function recordGuardianFailure(ip) {
     if (record.count >= 3) {
         // Block for 1 hour after 3 failures
         record.blockedUntil = Date.now() + (60 * 60 * 1000);
-        console.log(`[Guardian] IP ${ip} blocked for 1 hour after 3 failed attempts`);
+        logger.warn('IP blocked after 3 failed Guardian attempts', {
+            ip,
+            blockDuration: '1 hour',
+            failureCount: record.count
+        });
     }
 
     guardianFailures.set(ip, record);
@@ -372,7 +582,7 @@ Evaluate this observation using the VTS framework.`;
                     vtsAnalysis: evaluation.vts_analysis || null
                 };
             } catch (parseError) {
-                console.error('JSON parse error:', parseError);
+                logger.error('Failed to parse Guardian JSON response', { error: parseError.message });
             }
         }
 
@@ -388,13 +598,14 @@ Evaluate this observation using the VTS framework.`;
         };
 
     } catch (error) {
-        console.error('Gemini AI error:', error);
+        logger.error('Gemini AI evaluation error', { error: error.message, tokenId });
+        metrics.guardian.errors++;
 
         // Fallback to simpler model if Pro fails
         try {
             return await fallbackValidation(observation, tokenId);
         } catch (fallbackError) {
-            console.error('Fallback validation failed:', fallbackError);
+            logger.error('Fallback validation also failed', { error: fallbackError.message, tokenId });
             return {
                 approved: false,
                 softReject: false,
@@ -454,65 +665,139 @@ async function generateClaimSignature(claimerAddress, tokenId, observation) {
 }
 
 /**
- * Execute relay claim with optimistic response
+ * Execute relay claim with optimistic response and retry mechanism
  * Returns immediately after tx submission, confirmation happens in background
  * @param {string} recipientAddress - Address to receive NFT
  * @param {number} tokenId - Token ID to claim
  * @param {string} observation - User's observation text
  * @param {boolean} waitForConfirmation - If true, wait for tx confirmation (legacy behavior)
+ * @param {number} maxRetries - Maximum number of retry attempts (default: 3)
  * @returns {Promise<Object>} Transaction result
  */
-async function executeRelayClaim(recipientAddress, tokenId, observation, waitForConfirmation = false) {
+async function executeRelayClaim(recipientAddress, tokenId, observation, waitForConfirmation = false, maxRetries = 3) {
     if (!claimerContractWithSigner) {
         throw new Error('Claimer contract not configured');
     }
 
-    console.log(`Executing relay claim: recipient=${recipientAddress}, tokenId=${tokenId}`);
-
-    const gasEstimate = await claimerContractWithSigner.relayClaimNFT.estimateGas(
-        recipientAddress,
+    logger.info('Initiating relay claim', {
+        recipient: recipientAddress,
         tokenId,
-        observation
-    );
+        observationLength: observation.length
+    });
 
-    console.log(`Gas estimate: ${gasEstimate.toString()}`);
+    metrics.claims.attempted++;
+    metrics.blockchain.txSubmitted++;
 
-    const tx = await claimerContractWithSigner.relayClaimNFT(
-        recipientAddress,
-        tokenId,
-        observation,
-        { gasLimit: gasEstimate * 120n / 100n }
-    );
+    let lastError;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            const gasEstimate = await claimerContractWithSigner.relayClaimNFT.estimateGas(
+                recipientAddress,
+                tokenId,
+                observation
+            );
 
-    console.log(`Transaction submitted: ${tx.hash}`);
+            logger.debug('Gas estimation successful', {
+                gasEstimate: gasEstimate.toString(),
+                attempt
+            });
 
-    // Optimistic mode: return immediately with tx hash
-    if (!waitForConfirmation) {
-        // Fire-and-forget: Log confirmation in background
-        tx.wait().then(receipt => {
-            console.log(`[Background] TX ${tx.hash} confirmed in block ${receipt.blockNumber}`);
-        }).catch(err => {
-            console.error(`[Background] TX ${tx.hash} failed:`, err.message);
-        });
+            // Add 20% buffer to gas estimate
+            const gasLimit = gasEstimate * 120n / 100n;
 
-        return {
-            txHash: tx.hash,
-            broadcasting: true,
-            blockNumber: null,
-            gasUsed: null
-        };
+            const tx = await claimerContractWithSigner.relayClaimNFT(
+                recipientAddress,
+                tokenId,
+                observation,
+                { gasLimit }
+            );
+
+            logger.info('Transaction submitted', {
+                txHash: tx.hash,
+                recipient: recipientAddress,
+                tokenId,
+                attempt
+            });
+
+            // Optimistic mode: return immediately with tx hash
+            if (!waitForConfirmation) {
+                // Fire-and-forget: Log confirmation in background
+                tx.wait().then(receipt => {
+                    metrics.blockchain.txConfirmed++;
+                    metrics.claims.successful++;
+                    metrics.claims.gasUsed += BigInt(receipt.gasUsed);
+
+                    logger.info('Transaction confirmed in background', {
+                        txHash: tx.hash,
+                        blockNumber: receipt.blockNumber,
+                        gasUsed: receipt.gasUsed.toString()
+                    });
+                }).catch(err => {
+                    metrics.blockchain.txFailed++;
+                    metrics.claims.failed++;
+
+                    logger.error('Background transaction failed', {
+                        txHash: tx.hash,
+                        error: err.message
+                    });
+                });
+
+                return {
+                    txHash: tx.hash,
+                    broadcasting: true,
+                    blockNumber: null,
+                    gasUsed: null
+                };
+            }
+
+            // Legacy mode: wait for confirmation
+            const receipt = await tx.wait();
+            metrics.blockchain.txConfirmed++;
+            metrics.claims.successful++;
+            metrics.claims.gasUsed += BigInt(receipt.gasUsed);
+
+            logger.info('Transaction confirmed', {
+                txHash: tx.hash,
+                blockNumber: receipt.blockNumber,
+                gasUsed: receipt.gasUsed.toString()
+            });
+
+            return {
+                txHash: tx.hash,
+                broadcasting: false,
+                blockNumber: receipt.blockNumber,
+                gasUsed: receipt.gasUsed.toString()
+            };
+
+        } catch (error) {
+            lastError = error;
+            logger.warn('Relay claim attempt failed', {
+                attempt,
+                maxRetries,
+                error: error.message,
+                recipient: recipientAddress,
+                tokenId
+            });
+
+            // Don't retry on non-recoverable errors
+            if (error.message.includes('Already claimed') ||
+                error.message.includes('Token not available') ||
+                error.message.includes('insufficient funds')) {
+                break;
+            }
+
+            // Exponential backoff before retry
+            if (attempt < maxRetries) {
+                const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+                logger.info(`Retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
     }
 
-    // Legacy mode: wait for confirmation
-    const receipt = await tx.wait();
-    console.log(`Transaction confirmed in block ${receipt.blockNumber}`);
-
-    return {
-        txHash: tx.hash,
-        broadcasting: false,
-        blockNumber: receipt.blockNumber,
-        gasUsed: receipt.gasUsed.toString()
-    };
+    metrics.blockchain.txFailed++;
+    metrics.claims.failed++;
+    throw lastError;
 }
 
 // ============ API ROUTES ============
@@ -641,17 +926,45 @@ app.post('/api/submit-observation', async (req, res) => {
         }
 
         // AI Guardian evaluation
-        console.log(`[Guardian] Evaluating observation for ${address}, token ${tokenId || 'random'}`);
-        console.log(`[Guardian] Observation: "${trimmedObservation.slice(0, 50)}..."`);
+        logger.info('Guardian evaluation started', {
+            requestId: req.requestId,
+            address,
+            tokenId: tokenId || 'random',
+            observationPreview: trimmedObservation.slice(0, 50) + '...'
+        });
+
+        metrics.guardian.evaluations++;
+        const evaluationStart = Date.now();
 
         const evaluation = await validateObservationWithGemini(trimmedObservation, tokenId || 'random');
 
-        console.log(`[Guardian] Result: score=${evaluation.score}, approved=${evaluation.approved}`);
+        // Update Guardian metrics
+        metrics.guardian.scoreSum += evaluation.score || 0;
+        metrics.guardian.averageScore = metrics.guardian.scoreSum / metrics.guardian.evaluations;
+
+        if (evaluation.aestheticArchetype) {
+            metrics.guardian.byArchetype[evaluation.aestheticArchetype] =
+                (metrics.guardian.byArchetype[evaluation.aestheticArchetype] || 0) + 1;
+        }
+
+        logger.info('Guardian evaluation completed', {
+            requestId: req.requestId,
+            score: evaluation.score,
+            approved: evaluation.approved,
+            softReject: evaluation.softReject,
+            archetype: evaluation.aestheticArchetype,
+            duration: `${Date.now() - evaluationStart}ms`
+        });
 
         if (!evaluation.approved) {
             // Check if this is a soft rejection (score 3-4) - give them another chance without counting as failure
             if (evaluation.softReject) {
-                console.log(`[Guardian] Soft reject for IP ${clientIP}. Facilitating deeper observation.`);
+                metrics.guardian.softRejects++;
+                logger.info('Guardian soft rejection - facilitating deeper observation', {
+                    requestId: req.requestId,
+                    ip: clientIP,
+                    score: evaluation.score
+                });
 
                 // Use facilitator question as the primary message to prompt deeper observation
                 const facilitationMessage = evaluation.facilitatorQuestion
@@ -675,10 +988,17 @@ app.post('/api/submit-observation', async (req, res) => {
             }
 
             // Hard rejection - record failure and check if IP should be blocked
+            metrics.guardian.hardRejects++;
             const failureRecord = recordGuardianFailure(clientIP);
             const attemptsRemaining = 3 - failureRecord.count;
 
-            console.log(`[Guardian] Denied. IP ${clientIP} failures: ${failureRecord.count}/3`);
+            logger.info('Guardian hard rejection', {
+                requestId: req.requestId,
+                ip: clientIP,
+                score: evaluation.score,
+                failureCount: failureRecord.count,
+                attemptsRemaining: Math.max(0, attemptsRemaining)
+            });
 
             return res.json({
                 approved: false,
@@ -697,15 +1017,28 @@ app.post('/api/submit-observation', async (req, res) => {
         }
 
         // Success - reset failure count for this IP
+        metrics.guardian.approvals++;
         resetGuardianFailures(clientIP);
 
         // Execute relay claim (optimistic - returns immediately with tx hash)
-        console.log(`[Guardian] Approved! Executing relay claim (optimistic)...`);
+        logger.info('Guardian approved - executing relay claim', {
+            requestId: req.requestId,
+            address,
+            tokenId,
+            score: evaluation.score,
+            archetype: evaluation.aestheticArchetype
+        });
 
         try {
             const txResult = await executeRelayClaim(address, tokenId, trimmedObservation, false);
 
-            console.log(`[Guardian] TX submitted: ${txResult.txHash} (broadcasting: ${txResult.broadcasting})`);
+            logger.info('Relay claim transaction submitted', {
+                requestId: req.requestId,
+                txHash: txResult.txHash,
+                broadcasting: txResult.broadcasting,
+                address,
+                tokenId
+            });
 
             // Construct enhanced success message with paraphrase and archetype
             const welcomeMessage = evaluation.paraphrase && evaluation.aestheticArchetype
@@ -733,7 +1066,12 @@ app.post('/api/submit-observation', async (req, res) => {
             });
 
         } catch (claimError) {
-            console.error('[Guardian] Relay claim failed:', claimError);
+            logger.error('Relay claim failed', {
+                requestId: req.requestId,
+                error: claimError.message,
+                address,
+                tokenId
+            });
 
             let signature;
             if (tokenId) {
@@ -760,7 +1098,11 @@ app.post('/api/submit-observation', async (req, res) => {
         }
 
     } catch (error) {
-        console.error('Error processing observation:', error);
+        logger.error('Error processing observation', {
+            requestId: req.requestId,
+            error: error.message,
+            stack: error.stack
+        });
         res.status(500).json({ error: 'The Guardian encountered an anomaly. Please try again.' });
     }
 });
@@ -786,7 +1128,7 @@ app.get('/api/observation/:tokenId', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error fetching observation:', error);
+        logger.error('Error fetching observation', { error: error.message, tokenId: req.params.tokenId });
         res.status(500).json({ error: 'Failed to fetch observation' });
     }
 });
@@ -822,38 +1164,234 @@ app.get('/api/observations', async (req, res) => {
         res.json({ observations });
 
     } catch (error) {
-        console.error('Error fetching observations:', error);
+        logger.error('Error fetching observations', { error: error.message });
         res.status(500).json({ error: 'Failed to fetch observations' });
     }
+});
+
+// ============ MONITORING & METRICS ENDPOINTS ============
+
+/**
+ * Comprehensive metrics endpoint for monitoring
+ */
+app.get('/api/metrics', async (req, res) => {
+    try {
+        const uptime = Date.now() - metrics.startTime;
+        const uptimeFormatted = {
+            days: Math.floor(uptime / (24 * 60 * 60 * 1000)),
+            hours: Math.floor((uptime % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000)),
+            minutes: Math.floor((uptime % (60 * 60 * 1000)) / (60 * 1000)),
+            seconds: Math.floor((uptime % (60 * 1000)) / 1000)
+        };
+
+        // Get blockchain info
+        let blockNumber = 0;
+        let signerBalance = '0';
+        try {
+            blockNumber = await provider.getBlockNumber();
+            const balance = await provider.getBalance(signer.address);
+            signerBalance = ethers.formatEther(balance);
+        } catch (e) {
+            logger.warn('Failed to fetch blockchain info for metrics', { error: e.message });
+        }
+
+        res.json({
+            status: 'healthy',
+            version: '3.0.0',
+            uptime: uptimeFormatted,
+            uptimeMs: uptime,
+            signer: {
+                address: signer.address,
+                balance: `${signerBalance} ETH`
+            },
+            blockchain: {
+                currentBlock: blockNumber,
+                ...metrics.blockchain
+            },
+            requests: metrics.requests,
+            guardian: {
+                ...metrics.guardian,
+                averageScore: metrics.guardian.averageScore.toFixed(2)
+            },
+            claims: {
+                ...metrics.claims,
+                gasUsed: metrics.claims.gasUsed.toString(),
+                averageGas: metrics.claims.successful > 0
+                    ? (Number(metrics.claims.gasUsed) / metrics.claims.successful).toFixed(0)
+                    : 0
+            },
+            rateLimiting: {
+                blockedIPs: guardianFailures.size
+            }
+        });
+    } catch (error) {
+        logger.error('Error generating metrics', { error: error.message });
+        res.status(500).json({ error: 'Failed to generate metrics' });
+    }
+});
+
+/**
+ * Transaction status check endpoint
+ * Allows frontend to poll for transaction confirmation
+ */
+app.get('/api/tx-status/:txHash', async (req, res) => {
+    try {
+        const { txHash } = req.params;
+
+        if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
+            return res.status(400).json({ error: 'Invalid transaction hash format' });
+        }
+
+        const receipt = await provider.getTransactionReceipt(txHash);
+
+        if (!receipt) {
+            return res.json({
+                status: 'pending',
+                txHash,
+                confirmed: false,
+                message: 'Transaction is still pending'
+            });
+        }
+
+        res.json({
+            status: receipt.status === 1 ? 'confirmed' : 'failed',
+            txHash,
+            confirmed: receipt.status === 1,
+            blockNumber: receipt.blockNumber,
+            gasUsed: receipt.gasUsed.toString(),
+            effectiveGasPrice: receipt.gasPrice?.toString()
+        });
+
+    } catch (error) {
+        logger.error('Error checking transaction status', { error: error.message, txHash: req.params.txHash });
+        res.status(500).json({ error: 'Failed to check transaction status' });
+    }
+});
+
+/**
+ * Readiness probe for Kubernetes/load balancer
+ */
+app.get('/api/ready', async (req, res) => {
+    try {
+        // Check RPC connectivity
+        await provider.getBlockNumber();
+
+        // Check contract availability
+        if (claimerContract) {
+            await claimerContract.availableCount();
+        }
+
+        res.json({ ready: true });
+    } catch (error) {
+        logger.error('Readiness check failed', { error: error.message });
+        res.status(503).json({ ready: false, error: error.message });
+    }
+});
+
+/**
+ * Liveness probe for Kubernetes/load balancer
+ */
+app.get('/api/live', (req, res) => {
+    res.json({ live: true, timestamp: new Date().toISOString() });
 });
 
 // ============ ERROR HANDLING ============
 
 app.use((err, req, res, next) => {
-    console.error('Unhandled error:', err);
+    logger.error('Unhandled error', {
+        requestId: req.requestId,
+        error: err.message,
+        stack: err.stack,
+        path: req.path
+    });
     res.status(500).json({ error: 'Internal server error' });
 });
 
+// Handle 404
+app.use((req, res) => {
+    res.status(404).json({ error: 'Endpoint not found' });
+});
+
+// ============ GRACEFUL SHUTDOWN ============
+
+let server;
+const activeConnections = new Set();
+
+function gracefulShutdown(signal) {
+    logger.info(`Received ${signal}. Starting graceful shutdown...`);
+
+    // Stop accepting new connections
+    server.close(() => {
+        logger.info('HTTP server closed');
+
+        // Close active connections
+        for (const conn of activeConnections) {
+            conn.destroy();
+        }
+
+        logger.info('All connections closed. Exiting process.');
+        process.exit(0);
+    });
+
+    // Force shutdown after 30 seconds
+    setTimeout(() => {
+        logger.warn('Graceful shutdown timed out. Forcing exit.');
+        process.exit(1);
+    }, 30000);
+}
+
 // ============ SERVER START ============
 
-app.listen(PORT, () => {
+server = app.listen(PORT, () => {
+    logger.info('Server started', {
+        port: PORT,
+        signer: signer.address,
+        claimerContract: process.env.CLAIMER_CONTRACT || 'not configured',
+        nftContract: process.env.NFT_CONTRACT || 'not configured',
+        environment: process.env.NODE_ENV || 'development'
+    });
+
     console.log(`
 ╔════════════════════════════════════════════════════════════════╗
 ║                                                                ║
-║   🏔️  IKONBERG After Patmos Claim Service v2.0                 ║
+║   🏔️  IKONBERG After Patmos Claim Service v3.0                 ║
 ║                                                                ║
 ║   Server running on port ${PORT}                                 ║
 ║   Signer: ${signer.address.slice(0, 10)}...${signer.address.slice(-4)}                         ║
 ║                                                                ║
-║   Security:                                                    ║
+║   Features:                                                    ║
 ║   ├─ CSP: Web3-optimized Content Security Policy              ║
 ║   ├─ Rate Limit: IETF Draft-7 (100/15min, 5 claims/hr)       ║
-║   └─ AI Guardian: VTS Cognitive Firewall                      ║
+║   ├─ AI Guardian: VTS Cognitive Firewall                      ║
+║   ├─ Structured Logging: JSON format with request tracing     ║
+║   ├─ Transaction Retry: Exponential backoff (3 attempts)      ║
+║   ├─ Monitoring: /api/metrics, /api/ready, /api/live          ║
+║   └─ Graceful Shutdown: Signal handling (SIGTERM/SIGINT)      ║
 ║                                                                ║
 ║   The Guardian awaits your observations...                     ║
 ║                                                                ║
 ╚════════════════════════════════════════════════════════════════╝
     `);
+});
+
+// Track active connections for graceful shutdown
+server.on('connection', (conn) => {
+    activeConnections.add(conn);
+    conn.on('close', () => activeConnections.delete(conn));
+});
+
+// Register shutdown handlers
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+    logger.error('Uncaught exception', { error: error.message, stack: error.stack });
+    gracefulShutdown('uncaughtException');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled rejection', { reason: String(reason) });
 });
 
 module.exports = app;

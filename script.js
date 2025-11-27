@@ -556,12 +556,22 @@ async function submitToGuardian() {
                 document.getElementById('claim-step-2').style.display = 'none';
                 document.getElementById('claim-step-3').style.display = 'block';
 
+                // Build archetype and paraphrase display
+                const archetypeHtml = result.aestheticArchetype
+                    ? `<p class="result-archetype" style="margin: 15px 0; color: #9c27b0; font-style: italic;">You are recognized as <strong>${result.aestheticArchetype}</strong></p>`
+                    : '';
+                const paraphraseHtml = result.paraphrase
+                    ? `<p class="result-paraphrase" style="margin: 15px 0; padding: 15px; background: rgba(156, 39, 176, 0.1); border-left: 3px solid #9c27b0; border-radius: 4px; font-style: italic;">"${result.paraphrase}"</p>`
+                    : '';
+
                 resultContainer.innerHTML = `
                     <div class="guardian-approved">
                         <div class="result-icon">🎉</div>
                         <h3>NFT Claim Submitted!</h3>
                         <p class="result-message">Your observation has been deemed worthy!</p>
-                        <p class="result-reason">"${result.reason}"</p>
+                        ${archetypeHtml}
+                        ${paraphraseHtml}
+                        <p class="result-reason" style="color: #888; font-size: 13px;">${result.reason}</p>
                         <p class="result-score">Authenticity Score: ${result.score}/10</p>
                         <div class="tx-info" style="margin-top: 20px; padding: 15px; background: rgba(255, 193, 7, 0.1); border-radius: 8px;">
                             <p style="margin: 0 0 10px 0; color: #ffc107; font-weight: 600;">Transaction Broadcasting...</p>
@@ -573,12 +583,19 @@ async function submitToGuardian() {
                                style="display: inline-block; margin-top: 10px; color: #ffc107; text-decoration: none;">
                                 Track on Etherscan →
                             </a>
+                            <div id="tx-status-poll" data-tx-hash="${result.claimResult.txHash}" style="margin-top: 10px; font-size: 12px; color: #888;">
+                                Checking confirmation status...
+                            </div>
                         </div>
                         <button class="try-again-btn" style="margin-top: 20px;" onclick="closeClaimModal(); location.reload();">
                             Close
                         </button>
                     </div>
                 `;
+                // Start polling for transaction status
+                if (result.claimResult?.txHash) {
+                    pollTransactionStatus(result.claimResult.txHash);
+                }
                 return;
             }
 
@@ -588,12 +605,22 @@ async function submitToGuardian() {
                 document.getElementById('claim-step-2').style.display = 'none';
                 document.getElementById('claim-step-3').style.display = 'block';
 
+                // Build archetype and paraphrase display for confirmed claims
+                const archetypeHtmlConfirmed = result.aestheticArchetype
+                    ? `<p class="result-archetype" style="margin: 15px 0; color: #9c27b0; font-style: italic;">You are recognized as <strong>${result.aestheticArchetype}</strong></p>`
+                    : '';
+                const paraphraseHtmlConfirmed = result.paraphrase
+                    ? `<p class="result-paraphrase" style="margin: 15px 0; padding: 15px; background: rgba(156, 39, 176, 0.1); border-left: 3px solid #9c27b0; border-radius: 4px; font-style: italic;">"${result.paraphrase}"</p>`
+                    : '';
+
                 resultContainer.innerHTML = `
                     <div class="guardian-approved">
                         <div class="result-icon">🎉</div>
                         <h3>NFT Claimed Successfully!</h3>
                         <p class="result-message">Your observation has been deemed worthy and your NFT has been sent!</p>
-                        <p class="result-reason">"${result.reason}"</p>
+                        ${archetypeHtmlConfirmed}
+                        ${paraphraseHtmlConfirmed}
+                        <p class="result-reason" style="color: #888; font-size: 13px;">${result.reason}</p>
                         <p class="result-score">Authenticity Score: ${result.score}/10</p>
                         <div class="tx-info" style="margin-top: 20px; padding: 15px; background: rgba(76, 175, 80, 0.1); border-radius: 8px;">
                             <p style="margin: 0 0 10px 0; color: #4CAF50; font-weight: 600;">Transaction Confirmed</p>
@@ -666,21 +693,61 @@ async function submitToGuardian() {
             document.getElementById('claim-step-2').style.display = 'none';
             document.getElementById('claim-step-3').style.display = 'block';
 
-            const reasonText = result.reason ? `<p class="result-reason">"${result.reason}"</p>` : '';
+            const reasonText = result.reason ? `<p class="result-reason" style="color: #888; font-size: 13px; margin: 10px 0;">${result.reason}</p>` : '';
             const scoreText = result.score !== undefined ? `<p class="result-score">Score: ${result.score}/10 (minimum 5 required)</p>` : '';
 
-            resultContainer.innerHTML = `
-                <div class="guardian-rejected">
-                    <div class="result-icon">🏔️</div>
-                    <h3>The Guardian Has Spoken</h3>
-                    <p class="result-message">${result.message || 'Your observation was not deemed worthy.'}</p>
-                    ${reasonText}
-                    ${scoreText}
-                    <button class="try-again-btn" onclick="resetClaimModal()">
-                        Try Again
-                    </button>
-                </div>
-            `;
+            // Check if this is a soft rejection with facilitation
+            if (result.softReject && result.facilitatorQuestion) {
+                // Soft rejection - show VTS facilitation
+                const archetypeHintHtml = result.aestheticArchetype
+                    ? `<p style="color: #888; font-size: 12px; margin-top: 15px;">The Guardian senses you may be <em>${result.aestheticArchetype}</em></p>`
+                    : '';
+
+                resultContainer.innerHTML = `
+                    <div class="guardian-facilitation" style="text-align: center;">
+                        <div class="result-icon" style="font-size: 48px;">🔮</div>
+                        <h3 style="color: #9c27b0;">The Guardian Offers Guidance</h3>
+                        <p class="result-message" style="margin: 15px 0;">${result.message || 'Your observation shows potential...'}</p>
+                        <div class="facilitator-question" style="margin: 20px 0; padding: 20px; background: rgba(156, 39, 176, 0.1); border-radius: 8px; border-left: 4px solid #9c27b0;">
+                            <p style="margin: 0; font-size: 16px; font-style: italic; color: #9c27b0;">
+                                "${result.facilitatorQuestion}"
+                            </p>
+                        </div>
+                        ${archetypeHintHtml}
+                        ${reasonText}
+                        ${scoreText}
+                        <p style="color: #4CAF50; font-size: 12px; margin-top: 10px;">
+                            ✓ This does not count against your attempts
+                        </p>
+                        <button class="try-again-btn" style="margin-top: 15px; background: linear-gradient(135deg, #9c27b0, #673ab7);" onclick="resetClaimModal()">
+                            Look Deeper & Try Again
+                        </button>
+                    </div>
+                `;
+            } else {
+                // Hard rejection
+                const attemptsHtml = result.attemptsRemaining !== undefined && result.attemptsRemaining > 0
+                    ? `<p style="color: #ff9800; font-size: 12px; margin-top: 15px;">⚠️ ${result.attemptsRemaining} attempt${result.attemptsRemaining !== 1 ? 's' : ''} remaining before temporary block</p>`
+                    : '';
+                const blockedHtml = result.blocked
+                    ? `<p style="color: #f44336; font-size: 12px; margin-top: 15px;">🚫 You have been temporarily blocked for 1 hour</p>`
+                    : '';
+
+                resultContainer.innerHTML = `
+                    <div class="guardian-rejected">
+                        <div class="result-icon">🏔️</div>
+                        <h3>The Guardian Has Spoken</h3>
+                        <p class="result-message">${result.message || 'Your observation was not deemed worthy.'}</p>
+                        ${reasonText}
+                        ${scoreText}
+                        ${attemptsHtml}
+                        ${blockedHtml}
+                        <button class="try-again-btn" onclick="resetClaimModal()" ${result.blocked ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+                            ${result.blocked ? 'Blocked - Try Later' : 'Try Again'}
+                        </button>
+                    </div>
+                `;
+            }
         }
 
     } catch (error) {
@@ -729,6 +796,71 @@ async function executeClaim(address, tokenId, observation, signature, nonce) {
             </button>
         </div>
     `;
+}
+
+// Poll for transaction status
+async function pollTransactionStatus(txHash, maxAttempts = 20) {
+    const statusElement = document.getElementById('tx-status-poll');
+    if (!statusElement) return;
+
+    let attempts = 0;
+    const pollInterval = 3000; // 3 seconds
+
+    const checkStatus = async () => {
+        attempts++;
+
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/tx-status/${txHash}`);
+            const result = await response.json();
+
+            if (result.confirmed) {
+                // Transaction confirmed!
+                statusElement.innerHTML = `
+                    <span style="color: #4CAF50;">✓ Confirmed in block ${result.blockNumber}</span>
+                `;
+                // Update the parent container to show success styling
+                const txInfo = statusElement.closest('.tx-info');
+                if (txInfo) {
+                    txInfo.style.background = 'rgba(76, 175, 80, 0.1)';
+                    const broadcastingText = txInfo.querySelector('p[style*="color: #ffc107"]');
+                    if (broadcastingText) {
+                        broadcastingText.style.color = '#4CAF50';
+                        broadcastingText.textContent = 'Transaction Confirmed!';
+                    }
+                }
+                return; // Stop polling
+            }
+
+            if (result.status === 'failed') {
+                statusElement.innerHTML = `
+                    <span style="color: #f44336;">✗ Transaction failed</span>
+                `;
+                return; // Stop polling
+            }
+
+            // Still pending
+            statusElement.innerHTML = `
+                <span style="color: #888;">Waiting for confirmation... (${attempts}/${maxAttempts})</span>
+            `;
+
+            if (attempts < maxAttempts) {
+                setTimeout(checkStatus, pollInterval);
+            } else {
+                statusElement.innerHTML = `
+                    <span style="color: #888;">Taking longer than expected. Check Etherscan for status.</span>
+                `;
+            }
+
+        } catch (error) {
+            console.error('Error polling tx status:', error);
+            if (attempts < maxAttempts) {
+                setTimeout(checkStatus, pollInterval);
+            }
+        }
+    };
+
+    // Start polling
+    setTimeout(checkStatus, pollInterval);
 }
 
 // Reset claim modal to step 1

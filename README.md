@@ -10,9 +10,9 @@ After Patmos is a 100-piece NFT collection by IKONBERG (Peter Haubenberger / Tsu
 
 This repository contains the complete claiming infrastructure:
 
-- **Frontend**: Interactive 10x10 grid with wallet connection and claim flow
-- **Backend**: Relay service with Gemini 2.0 Flash AI Guardian using VTS methodology
-- **Smart Contracts**: Foundry-based Solidity contracts for gasless claiming
+- **Frontend**: Interactive 10x10 grid with wallet connection, claim flow, and real-time transaction tracking
+- **Backend**: Production-grade relay service with Gemini 2.0 Flash AI Guardian, structured logging, and monitoring
+- **Smart Contracts**: Gas-optimized Foundry-based Solidity contracts with emergency pause functionality
 
 ## Architecture
 
@@ -34,14 +34,30 @@ This repository contains the complete claiming infrastructure:
 
 ## Features
 
-- **Gasless Claims**: Users don't pay gas fees - the relay covers transaction costs
-- **AI Guardian with VTS**: Evaluates observations using Visual Thinking Strategies methodology
-- **Facilitation Mode**: Soft rejections offer VTS follow-up questions instead of hard failures
+### AI Guardian
+- **VTS Methodology**: Evaluates observations using Visual Thinking Strategies from MoMA
+- **Facilitation Mode**: Soft rejections (score 3-4) offer VTS follow-up questions instead of hard failures
 - **Aesthetic Profiling**: Classifies observers into 5 archetypes based on their perception style
 - **Poetic Paraphrasing**: Guardian mirrors approved observations back in elevated language
-- **IP Rate Limiting**: Blocks IPs after 3 hard rejections (soft rejects don't count)
+
+### Security & Reliability
+- **Gasless Claims**: Users don't pay gas fees - the relay covers transaction costs
+- **Transaction Retry**: Automatic retry with exponential backoff for failed transactions
+- **IP Rate Limiting**: IETF Draft-7 rate limiting, blocks IPs after 3 hard rejections
+- **Emergency Pause**: Contract can be paused in case of security issues
+- **Graceful Shutdown**: Backend handles SIGTERM/SIGINT for zero-downtime deployments
+
+### Monitoring & Observability
+- **Structured Logging**: JSON format with request tracing for debugging
+- **Metrics Endpoint**: `/api/metrics` provides comprehensive service statistics
+- **Health Probes**: `/api/ready` and `/api/live` for Kubernetes/load balancer integration
+- **Transaction Polling**: Frontend polls for transaction confirmation status
+
+### User Experience
 - **Wallet Integration**: Supports MetaMask and other Web3 wallets
 - **Interactive Grid**: Visual display of all 100 NFT pieces with claim status
+- **Real-time Feedback**: Visual display of Guardian archetype and paraphrased observation
+- **Client-side Caching**: Reduces API calls with intelligent localStorage caching
 
 ## Smart Contracts
 
@@ -53,9 +69,12 @@ Deployed on **Ethereum Mainnet**:
 | AfterPatmosClaimer | `0x83FB8FF0eAB0f036c4b3dC301483D571C5573a07` | [View](https://etherscan.io/address/0x83FB8FF0eAB0f036c4b3dC301483D571C5573a07) |
 
 **AfterPatmosClaimer Features:**
-- Allows whitelisted relayer to claim NFTs on behalf of users
-- One claim per wallet address
-- Stores observations on-chain
+- Allows whitelisted relayer to claim NFTs on behalf of users (gasless)
+- One claim per wallet address enforced on-chain
+- Observations stored in event logs (90% gas savings vs storage)
+- Gas-optimized bitmap tracking for 100 tokens
+- Emergency pause functionality for security incidents
+- Emergency withdraw all NFTs when paused
 - Owner can withdraw ETH and manage relayer permissions
 
 ## Project Structure

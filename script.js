@@ -640,12 +640,25 @@ async function submitToGuardian() {
                         <p class="result-message">Your observation has been deemed worthy.</p>
                         <p class="result-reason">"${result.reason}"</p>
                         <p class="result-score">Authenticity Score: ${result.score}/10</p>
-                        <button class="claim-action-btn" onclick="executeClaim('${ethAddress}', ${tokenId}, '${observation.replace(/'/g, "\\'")}', '${result.claimData?.signature || ''}', ${result.claimData?.nonce || 0})">
+                        <button class="claim-action-btn" id="execute-claim-btn" data-address="${encodeURIComponent(ethAddress)}" data-token-id="${tokenId}" data-observation="${encodeURIComponent(observation)}" data-signature="${encodeURIComponent(result.claimData?.signature || '')}" data-nonce="${result.claimData?.nonce || 0}">
                             Claim Your NFT
                         </button>
                     </div>
                 `;
                 window.pendingClaimData = result.claimData;
+
+                // Attach event listener safely (avoids XSS from inline onclick)
+                const claimBtn = document.getElementById('execute-claim-btn');
+                if (claimBtn) {
+                    claimBtn.addEventListener('click', function() {
+                        const addr = decodeURIComponent(this.dataset.address);
+                        const tid = parseInt(this.dataset.tokenId, 10);
+                        const obs = decodeURIComponent(this.dataset.observation);
+                        const sig = decodeURIComponent(this.dataset.signature);
+                        const nonce = parseInt(this.dataset.nonce, 10);
+                        executeClaim(addr, tid, obs, sig, nonce);
+                    });
+                }
             }
 
         } else {

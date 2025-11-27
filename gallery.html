@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Gallery - After Patmos</title>
+    
+    <!-- Configuration Meta Tags (set these for production) -->
+    <meta name="backend-url" content="">
+    <meta name="alchemy-api-key" content="">
+    
     <link rel="stylesheet" href="styles.css">
     <style>
         /* Gallery-specific styles */
@@ -274,7 +279,7 @@
         <!-- Connect Prompt (shown when not connected) -->
         <div id="connect-prompt" class="connect-prompt">
             <h2>Connect Your Wallet</h2>
-            <p>Connect your wallet to view your After Patmos NFT collection and add observations.</p>
+            <p>Connect your wallet to view your After Patmos fragments and add your observations.</p>
         </div>
 
         <!-- Gallery Content (shown when connected) -->
@@ -300,22 +305,22 @@
                     </div>
                 </div>
 
-                <h2>Your Collector Dashboard</h2>
-                <p>Welcome to your personal After Patmos gallery. Here you can manage your NFTs and contribute to the collective narrative.</p>
+                <h2>Your Fragment Collection</h2>
+                <p>Welcome, Observer. You have passed through <span class="highlight">The Guardian</span> and claimed your fragment of After Patmos.</p>
 
-                <h3>What You Can Do Here</h3>
+                <h3>Your Fragments</h3>
                 <ul>
-                    <li><span class="highlight">View Your Collection:</span> The artwork above highlights the pieces you own. Your NFTs are shown in full color, while pieces you don't own are blacked out.</li>
-                    <li><span class="highlight">Add Observations:</span> Click on any NFT you own to add your personal observation. This is your chance to describe what you see, feel, or interpret in your piece. Your observation will be permanently recorded.</li>
-                    <li><span class="highlight">View Full Resolution:</span> Access the high-resolution Arweave link for each of your NFTs to see every detail of the artwork.</li>
-                    <li><span class="highlight">View on OpenSea:</span> Quick access to your NFT's OpenSea page for trading or viewing provenance.</li>
+                    <li><span class="highlight">View Your Fragments:</span> The artwork above reveals the pieces you own. Your fragments are shown in full color, while unclaimed pieces remain hidden.</li>
+                    <li><span class="highlight">Add Your Observation:</span> Click on any fragment you own to record your perception. Your observation becomes the <em>soul</em> of the artwork—written permanently on-chain.</li>
+                    <li><span class="highlight">View Full Resolution:</span> Access the high-resolution Arweave link for each fragment.</li>
+                    <li><span class="highlight">View on OpenSea:</span> Access your fragment's OpenSea page for trading or provenance.</li>
                 </ul>
 
-                <h3>The Attestation Mechanism</h3>
-                <p>As a holder of After Patmos, you are part of the <span class="highlight">Collective Conductor</span>. Your observation becomes part of the artwork's permanent metadata - a subjective account of what you perceive within your window of the masterpiece. These attestations will be used to train a bespoke AI model on the emergent, collective reality of After Patmos.</p>
+                <h3>The Collective Conductor</h3>
+                <p>As a holder, you are one of 100 Observers who direct the future of <span class="highlight">IKONBERG</span>. Your observation is not just a password—it becomes part of the artwork's permanent metadata, a testimony of what you perceive within your window of the masterpiece.</p>
 
-                <h3>Reward for Participation</h3>
-                <p>Eligible participants who contribute their observation will collectively receive <span class="highlight">50% of the proceeds</span> from the final primary sale of the 1/1 After Patmos auction.</p>
+                <h3>The Final Seal</h3>
+                <p>Once all 100 fragments are claimed, the 1/1 Masterwork auction begins. <span class="highlight">50% of proceeds</span> go to the 100 Observers who contributed their testimony.</p>
             </div>
         </div>
 
@@ -332,9 +337,9 @@
 
                 <div id="gallery-observation-section">
                     <div id="gallery-observation-form" class="observation-form">
-                        <h3>Share Your Observation</h3>
-                        <p>Describe what you see, feel, or observe in this piece. This will be permanently stored and becomes part of the collective narrative.</p>
-                        <textarea id="gallery-observation-text" placeholder="What do you see, feel, or observe in this piece?" maxlength="500"></textarea>
+                        <h3>Record Your Testimony</h3>
+                        <p>What do you see? Your observation becomes the soul of your fragment—written permanently on-chain.</p>
+                        <textarea id="gallery-observation-text" placeholder="I see..." maxlength="500"></textarea>
                         <div class="char-count"><span id="gallery-char-count">0</span>/500</div>
                         <div class="form-buttons">
                             <button id="gallery-submit-observation" class="submit-btn">Submit Observation</button>
@@ -343,9 +348,9 @@
                     </div>
 
                     <div id="gallery-existing-observation" class="existing-observation" style="display: none;">
-                        <h3>Your Observation</h3>
+                        <h3>Your Testimony</h3>
                         <p id="gallery-observation-content"></p>
-                        <small>Thank you for contributing to the collective narrative.</small>
+                        <small>Your observation is now part of After Patmos.</small>
                     </div>
                 </div>
             </div>
@@ -364,13 +369,15 @@
     <div id="tooltip" class="tooltip"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js" integrity="sha384-DJAx6H4M+GqPTyQ6wryKQx0zH8zH8fvmZJFLQGvq4qCEdnbLxBJVVN6PAf9X+YNg" crossorigin="anonymous"></script>
+    <script src="config.js"></script>
     <script src="wallet.js"></script>
     <script>
-        // Gallery-specific configuration
-        const NFT_CONTRACT = '0x83e2654994264333e6fdfe2e43eb862866746041';
-        const TREASURY_ADDRESS = '0x764d2f2e65153a08c5509235334b08be2ae02915'.toLowerCase();
-        const CLAIMER_CONTRACT = '0x83FB8FF0eAB0f036c4b3dC301483D571C5573a07'.toLowerCase();
-        const OPENSEA_BASE_URL = 'https://opensea.io/assets/ethereum';
+        // Gallery-specific configuration (uses centralized config.js)
+        const CONFIG = window.AFTER_PATMOS_CONFIG || {};
+        const NFT_CONTRACT = CONFIG.NFT_CONTRACT || '0x83e2654994264333e6fdfe2e43eb862866746041';
+        const TREASURY_ADDRESS = (CONFIG.TREASURY_ADDRESS || '0x764d2f2e65153a08c5509235334b08be2ae02915').toLowerCase();
+        const CLAIMER_CONTRACT = (CONFIG.CLAIMER_CONTRACT || '0x83FB8FF0eAB0f036c4b3dC301483D571C5573a07').toLowerCase();
+        const OPENSEA_BASE_URL = CONFIG.OPENSEA_BASE_URL || 'https://opensea.io/assets/ethereum';
 
         // Grid mapping (same as main page)
         const TOKEN_TO_GRID = {};
@@ -408,7 +415,8 @@
         // Fetch user's NFTs from the contract
         async function fetchUserNFTs(address) {
             try {
-                const url = `https://eth-mainnet.g.alchemy.com/nft/v3/demo/getNFTsForOwner?owner=${address}&contractAddresses[]=${NFT_CONTRACT}&withMetadata=true&pageSize=100`;
+                const apiKey = CONFIG.ALCHEMY_API_KEY || 'demo';
+                const url = `https://eth-mainnet.g.alchemy.com/nft/v3/${apiKey}/getNFTsForOwner?owner=${address}&contractAddresses[]=${NFT_CONTRACT}&withMetadata=true&pageSize=100`;
                 const response = await fetch(url);
 
                 if (!response.ok) throw new Error('Failed to fetch NFTs');

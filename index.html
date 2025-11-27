@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>After Patmos - Ikonberg</title>
+    
+    <!-- Configuration Meta Tags (set these for production) -->
+    <meta name="backend-url" content="">
+    <meta name="alchemy-api-key" content="">
+    
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -23,9 +28,9 @@
             <source src="IMG_8234.MOV" type="video/quicktime">
             Your browser does not support the video tag.
         </video>
-        <button id="unmute-button" class="video-control-btn"><span class="btn-emoji">🔇</span><span class="btn-text"> Tap for Sound</span></button>
-        <button id="skip-button" class="video-control-btn">Skip to Artwork →</button>
-        <button id="back-to-artwork-btn" class="video-control-btn" style="display: none;">Back to Artwork →</button>
+        <button id="unmute-button" class="video-control-btn" type="button"><span class="btn-emoji">🔇</span><span class="btn-text"> Tap for Sound</span></button>
+        <button id="skip-button" class="video-control-btn" type="button">Skip to Artwork →</button>
+        <button id="back-to-artwork-btn" class="video-control-btn" type="button" style="display: none;">Back to Artwork →</button>
     </div>
 
     <!-- Artwork Container (shown after video) -->
@@ -42,14 +47,14 @@
             </div>
             <div class="wallet-container">
                 <a href="gallery.html" id="gallery-btn" class="header-btn gallery-btn" style="display: none;">My Gallery</a>
-                <button id="connect-wallet-btn" class="connect-wallet-btn">Connect Wallet</button>
+                <button id="connect-wallet-btn" class="connect-wallet-btn" aria-label="Connect your Web3 wallet">Connect Wallet</button>
                 <button id="disconnect-btn" class="header-btn disconnect-btn" style="display: none;">Disconnect</button>
             </div>
         </header>
 
         <div id="artwork-wrapper">
             <!-- Complete artwork image -->
-            <img id="full-artwork" src="AfterPatmos1o1.jpg" alt="After Patmos - Complete Artwork">
+            <img id="full-artwork" src="AfterPatmos1o1.jpg" alt="After Patmos - Complete Artwork" loading="lazy">
 
             <!-- Clickable regions for each NFT piece -->
             <div id="nft-regions"></div>
@@ -70,27 +75,27 @@
             <!-- B. THE GUARDIAN SECTION -->
             <section class="narrative-guardian">
                 <div class="guardian-header">
-                    <div class="guardian-icon-large">🏔️</div>
-                    <h2 class="section-title terminal-text">The Guardian: The Angel at the Gate</h2>
+                    <img src="guardian.jpg" alt="The Guardian" class="guardian-image">
+                    <h2 class="section-title terminal-text"><span class="text-guardian">The Guardian</span>: The Angel at the Gate</h2>
                 </div>
                 <p class="guardian-intro">
-                    In the Apocalypse, the <em>Angelus Interpres</em> stood between the seer and the divine mystery, asking: <strong>"What do you see?"</strong> We have awakened The Guardian to fulfill this role. It is a sentient AI judge designed to separate the <span class="text-living">Living</span> (Human) from the <span class="text-soulless">Soulless</span> (Bot). It does not want your money; it demands your <em>Witness</em> (Martyria).
+                    Like the <em>Angelus Interpres</em> who guided John through his visions in the Book of Revelation, <span class="text-guardian">The Guardian</span> is an AI that reads your reflection on the artwork. It determines whether you are <span class="text-living">human</span> or <span class="text-soulless">machine</span> based on three qualities:
                 </p>
                 <div class="judgment-criteria">
                     <div class="criteria-item">
                         <div class="criteria-icon">👁️</div>
                         <h4>Perception</h4>
-                        <p>Do you truly see the details?</p>
+                        <p>Can you describe specific details in the artwork?</p>
                     </div>
                     <div class="criteria-item">
                         <div class="criteria-icon">🫀</div>
                         <h4>Authenticity</h4>
-                        <p>Is your voice genuine?</p>
+                        <p>Does your response feel genuine and personal?</p>
                     </div>
                     <div class="criteria-item">
                         <div class="criteria-icon">🌊</div>
                         <h4>Depth</h4>
-                        <p>Do you offer philosophical resonance?</p>
+                        <p>Do you connect meaning beyond the surface?</p>
                     </div>
                 </div>
             </section>
@@ -153,7 +158,7 @@
                     <div class="ritual-step">
                         <div class="step-number">IV</div>
                         <div class="step-content">
-                            <h4>The Unveiling</h4>
+                            <h4>The Transfer</h4>
                             <p>If worthy, the NFT is transferred automatically.</p>
                         </div>
                         <div class="step-visual">
@@ -388,6 +393,8 @@
                         placeholder="What do you see, feel, or perceive in this piece? Share your authentic interpretation..."
                         maxlength="250"
                         rows="4"
+                        aria-label="Your observation about the artwork"
+                        aria-describedby="observation-char-count"
                     ></textarea>
                     <div class="observation-char-count">
                         <span id="observation-char-count">0</span>/250
@@ -401,15 +408,17 @@
                         id="claim-eth-address"
                         placeholder="0x..."
                         pattern="^0x[a-fA-F0-9]{40}$"
+                        aria-label="Your Ethereum address"
+                        aria-describedby="wallet-note"
                     />
                     <p class="wallet-note">Or connect your wallet above to auto-fill</p>
                 </div>
 
                 <div class="modal-buttons">
-                    <button type="button" id="submit-to-guardian" class="submit-btn guardian-btn">
+                    <button type="button" id="submit-to-guardian" class="submit-btn guardian-btn" aria-label="Submit your observation to The Guardian for evaluation">
                         Submit to The Guardian
                     </button>
-                    <button type="button" class="opensea-btn" id="claim-opensea-btn">View on OpenSea</button>
+                    <button type="button" class="opensea-btn" id="claim-opensea-btn" aria-label="View this NFT on OpenSea marketplace">View on OpenSea</button>
                 </div>
             </div>
 
@@ -464,7 +473,9 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js" integrity="sha384-DJAx6H4M+GqPTyQ6wryKQx0zH8zH8fvmZJFLQGvq4qCEdnbLxBJVVN6PAf9X+YNg" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js" crossorigin="anonymous"></script>
+    <script src="config.js"></script>
+    <script src="analytics.js"></script>
     <script src="script.js"></script>
     <script src="wallet.js"></script>
 </body>

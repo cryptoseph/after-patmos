@@ -1,12 +1,14 @@
 // Main script for the After Patmos website
-// NFT Contract: 0x83e2654994264333e6fdfe2e43eb862866746041
-// Treasury Address: 0x764d2f2e65153a08c5509235334b08be2ae02915
+// Configuration is loaded from config.js
 
-const NFT_CONTRACT = '0x83e2654994264333e6fdfe2e43eb862866746041';
-const TREASURY_ADDRESS = '0x764d2f2e65153a08c5509235334b08be2ae02915'.toLowerCase();
-const CLAIMER_CONTRACT = '0x83FB8FF0eAB0f036c4b3dC301483D571C5573a07'.toLowerCase();
-const OPENSEA_BASE_URL = 'https://opensea.io/assets/ethereum';
-const ALCHEMY_API_URL = 'https://eth-mainnet.g.alchemy.com/nft/v3/demo/getNFTsForOwner';
+// Use centralized configuration from config.js
+const APP_CONFIG = window.AFTER_PATMOS_CONFIG || {};
+const NFT_CONTRACT = APP_CONFIG.NFT_CONTRACT || '0x83e2654994264333e6fdfe2e43eb862866746041';
+const TREASURY_ADDRESS = (APP_CONFIG.TREASURY_ADDRESS || '0x764d2f2e65153a08c5509235334b08be2ae02915').toLowerCase();
+const CLAIMER_CONTRACT = (APP_CONFIG.CLAIMER_CONTRACT || '0x83FB8FF0eAB0f036c4b3dC301483D571C5573a07').toLowerCase();
+const OPENSEA_BASE_URL = APP_CONFIG.OPENSEA_BASE_URL || 'https://opensea.io/assets/ethereum';
+const ALCHEMY_API_URL = APP_CONFIG.ALCHEMY_API_URL || 'https://eth-mainnet.g.alchemy.com/nft/v3/demo/getNFTsForOwner';
+const ALCHEMY_METADATA_URL = APP_CONFIG.ALCHEMY_METADATA_URL || `https://eth-mainnet.g.alchemy.com/nft/v3/${APP_CONFIG.ALCHEMY_API_KEY || 'demo'}/getNFTMetadata`;
 
 // Grid mapping: Token ID to grid position
 // Grid is 10x10, positions are [row, col] (0-indexed from top-left)
@@ -55,8 +57,9 @@ buildGridMapping();
 // CACHING SYSTEM - Phase 4: Client-side caching with TTL
 // =============================================================================
 
-const CACHE_TTL = 10 * 60 * 1000; // 10 minutes in milliseconds
-const OWNERSHIP_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for ownership data
+// Cache settings - use from APP_CONFIG if available
+const CACHE_TTL = APP_CONFIG.CACHE_TTL || 10 * 60 * 1000; // 10 minutes in milliseconds
+const OWNERSHIP_CACHE_TTL = APP_CONFIG.OWNERSHIP_CACHE_TTL || 5 * 60 * 1000; // 5 minutes for ownership data
 
 /**
  * Generic fetch wrapper with localStorage caching and TTL
@@ -224,10 +227,11 @@ async function fetchClaimableNFTs() {
 
     try {
         // Only fetch NFTs held by the Claimer contract (available for claiming)
-        const response = await fetch(`https://eth-mainnet.g.alchemy.com/nft/v3/demo/getNFTsForOwner?owner=${CLAIMER_CONTRACT}&contractAddresses[]=${NFT_CONTRACT}&withMetadata=false&pageSize=100`);
+        const apiUrl = `${ALCHEMY_API_URL}?owner=${CLAIMER_CONTRACT}&contractAddresses[]=${NFT_CONTRACT}&withMetadata=false&pageSize=100`;
+        const response = await fetch(apiUrl);
 
         if (!response.ok) {
-            throw new Error('API error');
+            throw new Error(`API error: ${response.status} ${response.statusText}`);
         }
 
         const data = await response.json();
@@ -241,7 +245,14 @@ async function fetchClaimableNFTs() {
 
     } catch (error) {
         console.error('Error fetching claimable NFTs:', error);
+        
+        // Show user-friendly error message
+        if (APP_CONFIG.DEBUG_MODE) {
+            console.error('Detailed error:', error);
+        }
+        
         // Return empty array on error - will show all as not available
+        // Could optionally show a toast/notification to the user
         return [];
     }
 }
@@ -389,17 +400,19 @@ function handleRegionClick(tokenId, isOwned) {
     }
 }
 
-// Backend API URL (change to your deployed backend)
-const BACKEND_URL = 'http://192.168.178.30:3001';
+// Backend API URL (loaded from config.js)
+const BACKEND_URL = APP_CONFIG.BACKEND_URL || 'http://localhost:3001';
 
 // Fetch NFT metadata from Alchemy
 async function fetchNFTMetadata(tokenId) {
     const cacheKey = `nft_metadata_${tokenId}`;
 
     return fetchWithCache(cacheKey, async () => {
-        const url = `https://eth-mainnet.g.alchemy.com/nft/v3/demo/getNFTMetadata?contractAddress=${NFT_CONTRACT}&tokenId=${tokenId}`;
+        const url = `${ALCHEMY_METADATA_URL}?contractAddress=${NFT_CONTRACT}&tokenId=${tokenId}`;
         const response = await fetch(url);
-        if (!response.ok) throw new Error('Failed to fetch NFT metadata');
+        if (!response.ok) {
+            throw new Error(`Failed to fetch NFT metadata: ${response.status} ${response.statusText}`);
+        }
         const data = await response.json();
         return {
             image: data.image?.cachedUrl || data.image?.originalUrl || data.raw?.metadata?.image || '',
@@ -467,6 +480,17 @@ async function openClaimModal(tokenId) {
             }
         } catch (error) {
             console.error('Error fetching NFT metadata:', error);
+            
+            // Show placeholder or error state
+            if (nftImage) {
+                nftImage.alt = `After Patmos #${tokenId} - Image unavailable`;
+                // Optionally set a placeholder image
+                // nftImage.src = 'placeholder.jpg';
+            }
+            
+            if (APP_CONFIG.DEBUG_MODE) {
+                console.warn(`Could not load image for token ${tokenId}:`, error.message);
+            }
         }
     }
 }
@@ -514,6 +538,11 @@ async function submitToGuardian() {
     const observation = document.getElementById('claim-observation').value.trim();
     const ethAddress = document.getElementById('claim-eth-address').value.trim();
     const claimStatus = document.getElementById('claim-status');
+
+    // Track claim attempt
+    if (window.afterPatmosAnalytics) {
+        window.afterPatmosAnalytics.trackClaimAttempt(parseInt(tokenId), observation.length);
+    }
 
     // Validate inputs
     if (!observation || observation.length < 1) {
@@ -582,6 +611,11 @@ async function submitToGuardian() {
         }
 
         if (result.approved) {
+            // Track successful approval
+            if (window.afterPatmosAnalytics) {
+                window.afterPatmosAnalytics.trackClaimSuccess(parseInt(tokenId), result.score || 0);
+            }
+
             // Approved by Guardian - update to step 2 (broadcasting)
             updateProgressSteps(2);
 
@@ -702,6 +736,15 @@ async function submitToGuardian() {
             }
 
         } else {
+            // Track rejection
+            if (window.afterPatmosAnalytics) {
+                window.afterPatmosAnalytics.trackClaimRejection(
+                    parseInt(tokenId),
+                    result.score || 0,
+                    result.softReject || false
+                );
+            }
+
             // Rejected by Guardian
             document.getElementById('claim-step-2').style.display = 'none';
             document.getElementById('claim-step-3').style.display = 'block';
@@ -726,11 +769,33 @@ async function submitToGuardian() {
     } catch (error) {
         console.error('Error submitting to Guardian:', error);
 
+        // Track error
+        if (window.afterPatmosAnalytics) {
+            window.afterPatmosAnalytics.trackError(error, {
+                type: 'claim_submission_error',
+                tokenId: tokenId,
+                address: ethAddress
+            });
+        }
+
         // Show error
         document.getElementById('claim-step-2').style.display = 'none';
         document.getElementById('claim-step-1').style.display = 'block';
 
-        claimStatus.textContent = 'Connection to The Guardian failed. Please try again.';
+        // Provide more helpful error messages
+        let errorMessage = 'Connection to The Guardian failed. ';
+        
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            errorMessage += 'Please check your internet connection and try again.';
+        } else if (error.message.includes('timeout')) {
+            errorMessage += 'The request took too long. Please try again.';
+        } else if (error.message) {
+            errorMessage += `Error: ${error.message}`;
+        } else {
+            errorMessage += 'Please try again.';
+        }
+        
+        claimStatus.textContent = errorMessage;
         claimStatus.className = 'error';
         claimStatus.style.display = 'block';
     }
@@ -814,8 +879,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Unmute button
     const unmuteButton = document.getElementById('unmute-button');
+    console.log('Unmute button found:', unmuteButton);
     if (unmuteButton && promoVideo) {
-        unmuteButton.addEventListener('click', () => {
+        const handleUnmute = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Unmute button clicked!');
             const emojiSpan = unmuteButton.querySelector('.btn-emoji');
             const textSpan = unmuteButton.querySelector('.btn-text');
             if (promoVideo.muted) {
@@ -829,17 +898,29 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (textSpan) textSpan.textContent = ' Tap for Sound';
                 unmuteButton.classList.remove('unmuted');
             }
-        });
+        };
+        unmuteButton.addEventListener('click', handleUnmute, { capture: true });
+        console.log('Unmute button listeners attached');
+    } else {
+        console.warn('Unmute button or video not found!', { unmuteButton, promoVideo });
     }
 
     // Skip video button
+    console.log('Skip button found:', skipButton);
     if (skipButton) {
-        skipButton.addEventListener('click', () => {
+        const handleSkip = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Skip button clicked!');
             promoVideo.pause();
             videoContainer.classList.remove('active');
             artworkContainer.classList.add('active');
             sessionStorage.setItem('afterPatmosVideoWatched', 'true');
-        });
+        };
+        skipButton.addEventListener('click', handleSkip, { capture: true });
+        console.log('Skip button listeners attached');
+    } else {
+        console.warn('Skip button not found!');
     }
 
     // Back to video button (in header on artwork page)
@@ -1026,10 +1107,11 @@ function updateSealsProgress(availableCount) {
  */
 async function refreshSealsProgress() {
     try {
-        const response = await fetch(`https://eth-mainnet.g.alchemy.com/nft/v3/demo/getNFTsForOwner?owner=${CLAIMER_CONTRACT}&contractAddresses[]=${NFT_CONTRACT}&withMetadata=false&pageSize=100`);
+        const apiUrl = `${ALCHEMY_API_URL}?owner=${CLAIMER_CONTRACT}&contractAddresses[]=${NFT_CONTRACT}&withMetadata=false&pageSize=100`;
+        const response = await fetch(apiUrl);
 
         if (!response.ok) {
-            throw new Error('API error');
+            throw new Error(`API error: ${response.status} ${response.statusText}`);
         }
 
         const data = await response.json();

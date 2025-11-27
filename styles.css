@@ -34,15 +34,27 @@ body {
     pointer-events: all;
 }
 
+/* Ensure buttons are always clickable */
+#video-container button {
+    pointer-events: auto !important;
+}
+
+#video-container.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
 #promo-video {
     max-width: 90vw;
     max-height: 90vh;
     width: auto;
     height: auto;
+    pointer-events: none; /* Allow clicks to pass through to buttons */
+    z-index: 1; /* Behind buttons */
 }
 
 .video-control-btn {
-    position: absolute;
+    position: absolute !important;
     bottom: 40px;
     padding: 12px 24px;
     background-color: rgba(255, 255, 255, 0.1);
@@ -54,6 +66,15 @@ body {
     cursor: pointer;
     transition: all 0.3s ease;
     backdrop-filter: blur(10px);
+    z-index: 10000 !important; /* Very high z-index to be above everything */
+    pointer-events: auto !important; /* Force buttons to be clickable */
+    min-width: 44px; /* Minimum touch target size */
+    min-height: 44px; /* Minimum touch target size */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation; /* Optimize for touch */
 }
 
 .video-control-btn:hover {
@@ -2148,6 +2169,15 @@ body {
     line-height: 1;
 }
 
+.guardian-image {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 2px solid rgba(76, 175, 80, 0.5);
+    box-shadow: 0 4px 20px rgba(76, 175, 80, 0.3);
+}
+
 .section-title {
     font-size: 28px;
     font-weight: 700;
@@ -2174,6 +2204,11 @@ body {
 
 .text-soulless {
     color: #f44336;
+    font-weight: 700;
+}
+
+.text-guardian {
+    color: #ffffff;
     font-weight: 700;
 }
 

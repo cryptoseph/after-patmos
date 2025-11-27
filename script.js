@@ -935,4 +935,131 @@ document.addEventListener('DOMContentLoaded', async () => {
     const ownedTokens = await fetchTreasuryNFTs();
     console.log(`Treasury owns ${ownedTokens.length} NFTs`);
     createNFTGrid(ownedTokens);
+
+    // Initialize About Section interactivity
+    initAccordions();
+    initFlipCards();
+    updateSealsProgress(ownedTokens.length);
+
+    // Start auto-refresh for seals progress (every 30 minutes)
+    startSealsAutoRefresh();
 });
+
+// =============================================================================
+// ABOUT SECTION INTERACTIVITY
+// =============================================================================
+
+/**
+ * Initialize accordion toggles for the Archives section
+ */
+function initAccordions() {
+    const accordionHeaders = document.querySelectorAll('.accordion-header');
+
+    accordionHeaders.forEach(header => {
+        header.addEventListener('click', () => {
+            const item = header.parentElement;
+            const isActive = item.classList.contains('active');
+
+            // Close all other accordions (optional: comment out for multiple open)
+            document.querySelectorAll('.accordion-item.active').forEach(activeItem => {
+                if (activeItem !== item) {
+                    activeItem.classList.remove('active');
+                }
+            });
+
+            // Toggle current accordion
+            item.classList.toggle('active', !isActive);
+        });
+    });
+}
+
+/**
+ * Initialize flip cards for mobile tap interaction
+ */
+function initFlipCards() {
+    const flipCards = document.querySelectorAll('.flip-card');
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+
+    flipCards.forEach(card => {
+        if (isMobile) {
+            // On mobile, use tap to flip instead of hover
+            card.addEventListener('click', () => {
+                card.classList.toggle('flipped');
+            });
+
+            // Update hint text for mobile
+            const hint = card.querySelector('.card-hint');
+            if (hint) {
+                hint.textContent = 'Tap to reveal observation';
+            }
+        }
+    });
+}
+
+/**
+ * Update the seals progress bar based on available NFTs
+ * @param {number} availableCount - Number of NFTs still available (held by claimer)
+ */
+function updateSealsProgress(availableCount) {
+    const totalSeals = 100;
+    const progressPercent = (availableCount / totalSeals) * 100;
+
+    // Update progress bar (green = available)
+    const progressBar = document.getElementById('seals-progress-bar');
+    if (progressBar) {
+        // Animate the progress bar after a short delay
+        setTimeout(() => {
+            progressBar.style.width = `${progressPercent}%`;
+        }, 500);
+    }
+
+    // Update count text to show available
+    const sealsCount = document.getElementById('seals-count');
+    if (sealsCount) {
+        sealsCount.textContent = `${availableCount}/100`;
+    }
+}
+
+/**
+ * Fetch available NFT count from claimer contract and update progress
+ * This bypasses cache to get fresh data
+ */
+async function refreshSealsProgress() {
+    try {
+        const response = await fetch(`https://eth-mainnet.g.alchemy.com/nft/v3/demo/getNFTsForOwner?owner=${CLAIMER_CONTRACT}&contractAddresses[]=${NFT_CONTRACT}&withMetadata=false&pageSize=100`);
+
+        if (!response.ok) {
+            throw new Error('API error');
+        }
+
+        const data = await response.json();
+        const availableCount = data.ownedNfts.length;
+
+        console.log(`[Seals Refresh] Available NFTs: ${availableCount}`);
+        updateSealsProgress(availableCount);
+
+        return availableCount;
+    } catch (error) {
+        console.error('Error refreshing seals progress:', error);
+        return null;
+    }
+}
+
+// Auto-refresh seals progress every 30 minutes
+const SEALS_REFRESH_INTERVAL = 30 * 60 * 1000; // 30 minutes
+let sealsRefreshTimer = null;
+
+function startSealsAutoRefresh() {
+    // Clear any existing timer
+    if (sealsRefreshTimer) {
+        clearInterval(sealsRefreshTimer);
+    }
+
+    // Set up recurring refresh
+    sealsRefreshTimer = setInterval(() => {
+        console.log('[Seals] Auto-refreshing availability count...');
+        refreshSealsProgress();
+    }, SEALS_REFRESH_INTERVAL);
+
+    console.log(`[Seals] Auto-refresh enabled (every ${SEALS_REFRESH_INTERVAL / 60000} minutes)`);
+}

@@ -450,4 +450,173 @@ contract AfterPatmosClaimerTest is Test {
             assertTrue(available[i] != 3);
         }
     }
+
+    // ============ Pausable Tests ============
+
+    function testPauseUnpause() public {
+        // Initially not paused
+        assertFalse(claimer.isPaused());
+
+        // Owner can pause
+        vm.prank(owner);
+        claimer.pause();
+        assertTrue(claimer.isPaused());
+
+        // Owner can unpause
+        vm.prank(owner);
+        claimer.unpause();
+        assertFalse(claimer.isPaused());
+    }
+
+    function testOnlyOwnerCanPause() public {
+        vm.prank(user1);
+        vm.expectRevert();
+        claimer.pause();
+    }
+
+    function testOnlyOwnerCanUnpause() public {
+        vm.prank(owner);
+        claimer.pause();
+
+        vm.prank(user1);
+        vm.expectRevert();
+        claimer.unpause();
+    }
+
+    function testCannotClaimWhenPaused() public {
+        // Setup
+        uint256 tokenId = 1;
+        vm.startPrank(owner);
+        nft.mintSpecific(owner, tokenId);
+        nft.setApprovalForAll(address(claimer), true);
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = tokenId;
+        claimer.depositNFTs(tokenIds);
+
+        // Pause
+        claimer.pause();
+        vm.stopPrank();
+
+        // Try to claim
+        bytes memory sig = _signClaim(user1, tokenId, "Test observation");
+        vm.prank(user1);
+        vm.expectRevert(); // EnforcedPause error
+        claimer.claimNFT(tokenId, "Test observation", sig);
+    }
+
+    function testCannotRelayClaimWhenPaused() public {
+        // Setup
+        uint256 tokenId = 1;
+        vm.startPrank(owner);
+        nft.mintSpecific(owner, tokenId);
+        nft.setApprovalForAll(address(claimer), true);
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = tokenId;
+        claimer.depositNFTs(tokenIds);
+
+        // Pause
+        claimer.pause();
+        vm.stopPrank();
+
+        // Try to relay claim
+        vm.prank(signer);
+        vm.expectRevert(); // EnforcedPause error
+        claimer.relayClaimNFT(user1, tokenId, "Test observation");
+    }
+
+    function testCanClaimAfterUnpause() public {
+        // Setup
+        uint256 tokenId = 1;
+        vm.startPrank(owner);
+        nft.mintSpecific(owner, tokenId);
+        nft.setApprovalForAll(address(claimer), true);
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = tokenId;
+        claimer.depositNFTs(tokenIds);
+
+        // Pause then unpause
+        claimer.pause();
+        claimer.unpause();
+        vm.stopPrank();
+
+        // Should be able to claim now
+        bytes memory sig = _signClaim(user1, tokenId, "Test observation");
+        vm.prank(user1);
+        claimer.claimNFT(tokenId, "Test observation", sig);
+
+        assertEq(nft.ownerOf(tokenId), user1);
+    }
+
+    function testEmergencyWithdrawAll() public {
+        // Setup: deposit multiple NFTs
+        vm.startPrank(owner);
+        for (uint256 i = 1; i <= 5; i++) {
+            nft.mintSpecific(owner, i);
+        }
+        nft.setApprovalForAll(address(claimer), true);
+
+        uint256[] memory tokenIds = new uint256[](5);
+        for (uint256 i = 0; i < 5; i++) {
+            tokenIds[i] = i + 1;
+        }
+        claimer.depositNFTs(tokenIds);
+
+        // Claim one token first
+        vm.stopPrank();
+        bytes memory sig = _signClaim(user1, 3, "Claiming token 3");
+        vm.prank(user1);
+        claimer.claimNFT(3, "Claiming token 3", sig);
+
+        // Now pause and emergency withdraw
+        vm.startPrank(owner);
+        claimer.pause();
+        claimer.emergencyWithdrawAll(owner);
+        vm.stopPrank();
+
+        // Tokens 1, 2, 4, 5 should be back with owner
+        assertEq(nft.ownerOf(1), owner);
+        assertEq(nft.ownerOf(2), owner);
+        assertEq(nft.ownerOf(4), owner);
+        assertEq(nft.ownerOf(5), owner);
+
+        // Token 3 should still be with user1 (was claimed)
+        assertEq(nft.ownerOf(3), user1);
+
+        // Available count should be 0
+        assertEq(claimer.availableCount(), 0);
+    }
+
+    function testEmergencyWithdrawRequiresPause() public {
+        // Setup
+        vm.startPrank(owner);
+        nft.mintSpecific(owner, 1);
+        nft.setApprovalForAll(address(claimer), true);
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = 1;
+        claimer.depositNFTs(tokenIds);
+
+        // Try emergency withdraw without pausing
+        vm.expectRevert(); // ExpectedPause error
+        claimer.emergencyWithdrawAll(owner);
+        vm.stopPrank();
+    }
+
+    function testSetSignerRejectsZeroAddress() public {
+        vm.prank(owner);
+        vm.expectRevert("Invalid signer address");
+        claimer.setSigner(address(0));
+    }
+
+    function testWithdrawNFTsRejectsZeroAddress() public {
+        vm.startPrank(owner);
+        nft.mintSpecific(owner, 1);
+        nft.setApprovalForAll(address(claimer), true);
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = 1;
+        claimer.depositNFTs(tokenIds);
+
+        vm.expectRevert("Invalid recipient");
+        claimer.withdrawNFTs(tokenIds, address(0));
+        vm.stopPrank();
+    }
 }

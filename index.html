@@ -23,7 +23,7 @@
             <source src="IMG_8234.MOV" type="video/quicktime">
             Your browser does not support the video tag.
         </video>
-        <button id="unmute-button" class="video-control-btn">🔇 Tap for Sound</button>
+        <button id="unmute-button" class="video-control-btn"><span class="btn-emoji">🔇</span><span class="btn-text"> Tap for Sound</span></button>
         <button id="skip-button" class="video-control-btn">Skip to Artwork →</button>
         <button id="back-to-artwork-btn" class="video-control-btn" style="display: none;">Back to Artwork →</button>
     </div>
@@ -68,9 +68,9 @@
             <blockquote class="about-quote">"Thanks for having me in your reality, welcome to ours."</blockquote>
 
             <h3>⏳ The Dormancy & The Bloom (2022–Present)</h3>
-            <p>The seed of <em>After Patmos</em> was first sown in 2022, a vision of fragmented reality conceived during the early waves of digital ownership. The initial fragments were distributed physically—hand-to-hand—during the NFT Berlin and NFT Paris events of that year. This foundation was laid with the instrumental guidance of <a href="https://x.com/kryptoseph" target="_blank" rel="noopener noreferrer" style="color: #ff8c00; text-decoration: none; font-weight: 600;">road2punk</a>, whose early support helped anchor the project's roots.</p>
+            <p>The seed of <em>After Patmos</em> was first sown in 2022, a vision of fragmented reality conceived during the early waves of digital ownership. The initial fragments were distributed physically—hand-to-hand—during the NFT Berlin and NFT Paris events of that year. This foundation was laid with the instrumental guidance of <a href="https://x.com/kryptoseph" target="_blank" rel="noopener noreferrer" style="color: #ffff00; text-decoration: none; font-weight: 600;">road2punk</a>, whose early support helped anchor the project's roots.</p>
 
-            <p>The conceptual architecture of <em>After Patmos</em> draws from two pivotal forces in the NFT space. From <a href="https://cryptopunks.app/" target="_blank" rel="noopener noreferrer" style="color: #ff00ff; text-decoration: none; font-weight: 600;">CryptoPunks</a>, we inherited the revolutionary ethos of the free claim—a grid of unique digital artifacts offered without monetary barrier, where the act of claiming itself becomes the initiation. Yet we sought to distill this into something more intimate: a smaller collective, a tighter circle of consciousness. From <a href="https://pak.art/" target="_blank" rel="noopener noreferrer" style="color: #ff8c00; text-decoration: none; font-weight: 600;">Pak</a>, the enigmatic architect of conceptual NFT mechanisms, we absorbed the understanding that an NFT can transcend the static image—it can be a living system, a philosophical instrument, a collaborative ritual between artist and collector.</p>
+            <p>The conceptual architecture of <em>After Patmos</em> draws from two pivotal forces in the NFT space. From <a href="https://cryptopunks.app/" target="_blank" rel="noopener noreferrer" style="color: #ff00ff; text-decoration: none; font-weight: 600;">CryptoPunks</a>, we inherited the revolutionary ethos of the free claim—a grid of unique digital artifacts offered without monetary barrier, where the act of claiming itself becomes the initiation. Yet we sought to distill this into something more intimate: a smaller collective, a tighter circle of consciousness. From <a href="https://x.com/muratpak" target="_blank" rel="noopener noreferrer" style="color: #ffffff; text-decoration: none; font-weight: 700;">Pak</a>, the enigmatic architect of conceptual NFT mechanisms, we absorbed the understanding that an NFT can transcend the static image—it can be a living system, a philosophical instrument, a collaborative ritual between artist and collector.</p>
 
             <p>The emergence of <a href="https://botto.com/" target="_blank" rel="noopener noreferrer" style="color: #4ecdc4; text-decoration: none; font-weight: 600;">Botto</a>—the decentralized autonomous artist governed by its community—illuminated another path forward. Botto demonstrated that AI could become not just a tool, but a creative entity shaped by collective human taste, where governance and artistry intertwine. This vision of AI-human symbiosis deeply informed our approach to The Guardian: an AI consciousness that doesn't merely execute commands, but genuinely evaluates, responds, and evolves through interaction with the collective.</p>
 
@@ -130,7 +130,7 @@
         <footer id="site-footer">
             <div class="footer-main">
                 <div class="social-links">
-                    <a href="https://opensea.io/collection/after-patmos" target="_blank" rel="noopener noreferrer" class="social-link opensea-link">
+                    <a href="https://opensea.io/collection/ikonberg" target="_blank" rel="noopener noreferrer" class="social-link opensea-link">
                         <span class="social-icon">⛵</span> OpenSea
                     </a>
                     <a href="https://x.com/ikonberg" target="_blank" rel="noopener noreferrer" class="social-link">
@@ -227,6 +227,17 @@
             <!-- Step 1: Observation -->
             <div id="claim-step-1">
                 <h2>Claim After Patmos #<span id="modal-token-id"></span></h2>
+
+                <!-- NFT Image Preview -->
+                <div class="claim-nft-preview">
+                    <a id="claim-nft-arweave-link" href="#" target="_blank" rel="noopener noreferrer" title="View Full Resolution on Arweave">
+                        <img id="claim-nft-image" src="" alt="NFT Preview" />
+                        <div class="preview-overlay">
+                            <span>View Full Resolution</span>
+                        </div>
+                    </a>
+                </div>
+
                 <div class="claim-intro">
                     <p class="guardian-intro">To join the <strong>IKONBERG Collective</strong>, you must first share your observation.</p>
                     <p class="guardian-desc">The <span class="guardian-text">Guardian</span> (an AI consciousness) will evaluate your perception. Only those who demonstrate genuine engagement with the artwork may claim a piece.</p>

@@ -390,13 +390,31 @@ function handleRegionClick(tokenId, isOwned) {
 }
 
 // Backend API URL (change to your deployed backend)
-const BACKEND_URL = 'http://localhost:3001';
+const BACKEND_URL = 'http://192.168.178.30:3001';
+
+// Fetch NFT metadata from Alchemy
+async function fetchNFTMetadata(tokenId) {
+    const cacheKey = `nft_metadata_${tokenId}`;
+
+    return fetchWithCache(cacheKey, async () => {
+        const url = `https://eth-mainnet.g.alchemy.com/nft/v3/demo/getNFTMetadata?contractAddress=${NFT_CONTRACT}&tokenId=${tokenId}`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to fetch NFT metadata');
+        const data = await response.json();
+        return {
+            image: data.image?.cachedUrl || data.image?.originalUrl || data.raw?.metadata?.image || '',
+            arweaveUrl: data.raw?.metadata?.image || data.image?.originalUrl || ''
+        };
+    }, CACHE_TTL);
+}
 
 // Open claim modal for available NFTs
-function openClaimModal(tokenId) {
+async function openClaimModal(tokenId) {
     const modal = document.getElementById('claim-modal');
     const modalTokenId = document.getElementById('modal-token-id');
     const claimStatus = document.getElementById('claim-status');
+    const nftImage = document.getElementById('claim-nft-image');
+    const arweaveLink = document.getElementById('claim-nft-arweave-link');
 
     if (modal && modalTokenId) {
         modalTokenId.textContent = tokenId;
@@ -427,7 +445,29 @@ function openClaimModal(tokenId) {
             claimStatus.textContent = '';
         }
 
+        // Set placeholder image while loading
+        if (nftImage) {
+            nftImage.src = '';
+            nftImage.alt = `After Patmos #${tokenId}`;
+        }
+        if (arweaveLink) {
+            arweaveLink.href = '#';
+        }
+
         modal.classList.add('active');
+
+        // Fetch and display NFT image
+        try {
+            const metadata = await fetchNFTMetadata(tokenId);
+            if (nftImage && metadata.image) {
+                nftImage.src = metadata.image;
+            }
+            if (arweaveLink && metadata.arweaveUrl) {
+                arweaveLink.href = metadata.arweaveUrl;
+            }
+        } catch (error) {
+            console.error('Error fetching NFT metadata:', error);
+        }
     }
 }
 
@@ -776,13 +816,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const unmuteButton = document.getElementById('unmute-button');
     if (unmuteButton && promoVideo) {
         unmuteButton.addEventListener('click', () => {
+            const emojiSpan = unmuteButton.querySelector('.btn-emoji');
+            const textSpan = unmuteButton.querySelector('.btn-text');
             if (promoVideo.muted) {
                 promoVideo.muted = false;
-                unmuteButton.textContent = '🔊 Sound On';
+                if (emojiSpan) emojiSpan.textContent = '🔊';
+                if (textSpan) textSpan.textContent = ' Sound On';
                 unmuteButton.classList.add('unmuted');
             } else {
                 promoVideo.muted = true;
-                unmuteButton.textContent = '🔇 Tap for Sound';
+                if (emojiSpan) emojiSpan.textContent = '🔇';
+                if (textSpan) textSpan.textContent = ' Tap for Sound';
                 unmuteButton.classList.remove('unmuted');
             }
         });

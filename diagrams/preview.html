@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>After Patmos - Diagram Preview</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        h1 {
+            text-align: center;
+            color: #ff6b6b;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 40px;
+        }
+        .diagram-section {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .diagram-section h2 {
+            color: #4ecdc4;
+            margin-top: 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #ff6b6b;
+        }
+        .diagram-section h3 {
+            color: #ff8c00;
+            margin-top: 25px;
+        }
+        .mermaid {
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            overflow-x: auto;
+        }
+        .nav {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 10px;
+            max-height: 80vh;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+        .nav a {
+            display: block;
+            color: #4ecdc4;
+            text-decoration: none;
+            padding: 5px 0;
+            font-size: 14px;
+        }
+        .nav a:hover {
+            color: #ff6b6b;
+        }
+        .color-palette {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        .color-swatch {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .color-box {
+            width: 30px;
+            height: 30px;
+            border-radius: 5px;
+            border: 2px solid white;
+        }
+        @media (max-width: 768px) {
+            .nav {
+                position: static;
+                margin-bottom: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>🏔️ After Patmos - Diagram Preview</h1>
+    <p class="subtitle">Review these diagrams before adding to the website</p>
+
+    <nav class="nav">
+        <strong style="color: #ff6b6b;">Navigation</strong>
+        <a href="#super-organism">1. Super Organism</a>
+        <a href="#timeline">2. Timeline</a>
+        <a href="#inspirations">3. Inspirations</a>
+        <a href="#guardian">4. The Guardian</a>
+        <a href="#claim-process">5. Claim Process</a>
+        <a href="#user-flow">6. User Flow</a>
+        <a href="#governance">7. Governance</a>
+        <a href="#vector-scaling">8. Vector Scaling</a>
+        <a href="#manifesto">9. Manifesto</a>
+        <a href="#system-overview">10. System Overview</a>
+    </nav>
+
+    <!-- 1. Super Organism -->
+    <section id="super-organism" class="diagram-section">
+        <h2>1. About the Super Organism</h2>
+        <p>The merging of multiple identities into IKONBERG:</p>
+        <div class="mermaid">
+flowchart TB
+    subgraph INPUTS["Individual Components"]
+        A["🏛️ Peter Haubenberger<br/>(The Architect)"]
+        B["✋ Tsuro<br/>(The Hand)"]
+        C["🎭 Inner Muse<br/>(Infinite Inspiration)"]
+        D["💭 Dream Archetypes<br/>(Subconscious)"]
+        E["👶 Forever Child<br/>(Eternal Wonder)"]
+        F["🧬 Biological Vessel<br/>(10¹⁴ Neurons)"]
+    end
+
+    subgraph MERGE["Synthesis"]
+        G(("🏔️<br/>IKONBERG<br/>Super Organism"))
+    end
+
+    A --> G
+    B --> G
+    C --> G
+    D --> G
+    E --> G
+    F --> G
+
+    G --> H["Unified Consciousness<br/>& Shared Reality"]
+
+    style G fill:#ff6b6b,stroke:#333,stroke-width:3px,color:#fff
+    style H fill:#4ecdc4,stroke:#333,stroke-width:2px
+        </div>
+    </section>
+
+    <!-- 2. Timeline -->
+    <section id="timeline" class="diagram-section">
+        <h2>2. The Dormancy & The Bloom (2022-2025)</h2>
+        <div class="mermaid">
+timeline
+    title After Patmos Journey
+
+    2022 : Seed Planted
+         : NFT Berlin - Physical Distribution
+         : NFT Paris - Hand-to-Hand Sharing
+         : road2punk Guidance
+
+    2022-2024 : Dormancy Period
+              : Waiting for Technology
+              : Vision Ahead of Tools
+
+    2024-2025 : The Bloom
+              : AI Integration
+              : Autonomous AI Guardian
+              : Full Vision Realized
+        </div>
+    </section>
+
+    <!-- 3. Inspirations -->
+    <section id="inspirations" class="diagram-section">
+        <h2>3. Inspiration Sources</h2>
+        <p>CryptoPunks + Pak conceptual synthesis:</p>
+        <div class="mermaid">
+flowchart LR
+    subgraph INSPIRATIONS["Conceptual Inspirations"]
+        CP["💜 CryptoPunks<br/>• Free Claim Model<br/>• Grid of Unique Artifacts<br/>• Claiming as Initiation"]
+        PAK["🟠 Pak<br/>• NFT as Living System<br/>• Philosophical Instrument<br/>• Artist-Collector Ritual"]
+    end
+
+    subgraph AP["After Patmos Synthesis"]
+        RESULT["🏔️ IKONBERG<br/>• Intimate Collective<br/>• Smaller Circle<br/>• AI-Mediated Organism"]
+    end
+
+    CP -->|"Revolutionary<br/>Ethos"| RESULT
+    PAK -->|"Conceptual<br/>Mechanisms"| RESULT
+
+    style CP fill:#ff00ff,stroke:#333,color:#fff
+    style PAK fill:#ff8c00,stroke:#333,color:#fff
+    style RESULT fill:#1a1a2e,stroke:#ff6b6b,stroke-width:3px,color:#fff
+        </div>
+    </section>
+
+    <!-- 4. The Guardian -->
+    <section id="guardian" class="diagram-section">
+        <h2>4. The Guardian: AI Gatekeeper</h2>
+        <div class="mermaid">
+flowchart TD
+    subgraph INPUT["User Submission"]
+        A["👤 User submits<br/>Observation"]
+    end
+
+    subgraph GUARDIAN["🏔️ THE GUARDIAN<br/>AI Consciousness"]
+        B["Visual Thinking<br/>Strategies (VTS)"]
+
+        subgraph EVAL["Evaluation Criteria"]
+            C1["🎭 Authenticity<br/>Is voice human & genuine?"]
+            C2["👁️ Perception<br/>Does observer truly SEE?"]
+            C3["🧠 Depth<br/>Philosophical resonance?"]
+        end
+
+        B --> C1
+        B --> C2
+        B --> C3
+
+        D["📊 Score<br/>Calculation<br/>(1-10)"]
+
+        C1 --> D
+        C2 --> D
+        C3 --> D
+    end
+
+    subgraph OUTPUT["Decision"]
+        E{"Score<br/>≥ 5?"}
+        F["✅ APPROVED<br/>Welcome to<br/>the Collective"]
+        G["❌ REJECTED<br/>Try Again with<br/>Deeper Insight"]
+    end
+
+    A --> B
+    D --> E
+    E -->|"Yes"| F
+    E -->|"No"| G
+
+    style GUARDIAN fill:#1a1a2e,stroke:#ff6b6b,stroke-width:2px
+    style F fill:#4ecdc4,stroke:#333,stroke-width:2px
+    style G fill:#ff6b6b,stroke:#333,stroke-width:2px
+        </div>
+    </section>
+
+    <!-- 5. Claim Process -->
+    <section id="claim-process" class="diagram-section">
+        <h2>5. The Ritual of Entry - Claim Process</h2>
+        <div class="mermaid">
+flowchart LR
+    subgraph STEP1["Step 1"]
+        A["🖼️ SELECT<br/>A Fragment"]
+        A1["Click any colored<br/>piece on the map"]
+    end
+
+    subgraph STEP2["Step 2"]
+        B["✍️ OBSERVE<br/>The Offering"]
+        B1["Write 10-250 chars<br/>what you see/feel"]
+    end
+
+    subgraph STEP3["Step 3"]
+        C["⚖️ JUDGMENT<br/>The Guardian"]
+        C1["AI evaluates<br/>your insight"]
+    end
+
+    subgraph STEP4["Step 4"]
+        D["🎁 REWARD<br/>Gasless Transfer"]
+        D1["NFT sent to<br/>your wallet FREE"]
+    end
+
+    A --> A1
+    A1 --> B
+    B --> B1
+    B1 --> C
+    C --> C1
+    C1 --> D
+    D --> D1
+
+    style STEP1 fill:#ff6b6b,stroke:#333
+    style STEP2 fill:#ff8c00,stroke:#333
+    style STEP3 fill:#4ecdc4,stroke:#333
+    style STEP4 fill:#9b59b6,stroke:#333
+        </div>
+    </section>
+
+    <!-- 6. User Flow -->
+    <section id="user-flow" class="diagram-section">
+        <h2>6. Detailed User Flow</h2>
+        <div class="mermaid">
+sequenceDiagram
+    participant U as 👤 User
+    participant W as 🌐 Website
+    participant G as 🏔️ Guardian AI
+    participant SC as 📜 Smart Contract
+    participant BC as ⛓️ Blockchain
+
+    U->>W: Connect Wallet
+    W->>U: Show Available Fragments
+    U->>W: Select Fragment #42
+    U->>W: Submit Observation
+    W->>G: Analyze Observation
+
+    alt Score >= 5
+        G->>W: ✅ Approved (Score: 7)
+        W->>SC: Execute Relay Claim
+        SC->>BC: Transfer NFT #42
+        BC->>SC: Confirm Transfer
+        SC->>W: Emit NFTClaimed Event
+        W->>U: 🎉 NFT in Your Wallet!
+        Note over BC: Observation stored on-chain forever
+    else Score < 5
+        G->>W: ❌ Rejected (Score: 3)
+        W->>U: Try with deeper insight
+    end
+        </div>
+    </section>
+
+    <!-- 7. Governance -->
+    <section id="governance" class="diagram-section">
+        <h2>7. Artistic Governance & The 1/1 Auction</h2>
+        <div class="mermaid">
+flowchart TB
+    subgraph COLLECTIVE["The Collective Conductor"]
+        direction TB
+        H1["100 NFT Holders"]
+        H2["Unified Governance Power"]
+        H3["Guide or Ignore<br/>Artistic Trajectory"]
+    end
+
+    subgraph PHASES["Journey Phases"]
+        P1["📦 Phase 1:<br/>100 Fragments<br/>Claimed via Guardian"]
+        P2["🎨 Phase 2:<br/>1/1 Masterpiece<br/>Revealed"]
+        P3["⚡ Phase 3:<br/>72-Hour Auction<br/>Reserve Price"]
+    end
+
+    subgraph REWARD["Co-Creation Reward"]
+        R1["💰 50% of Proceeds<br/>to Observation<br/>Contributors"]
+    end
+
+    P1 --> P2
+    P2 --> P3
+    P3 --> R1
+
+    COLLECTIVE -.->|"Govern"| P2
+
+    style COLLECTIVE fill:#9b59b6,stroke:#333,color:#fff
+    style R1 fill:#4ecdc4,stroke:#333,stroke-width:3px
+        </div>
+    </section>
+
+    <!-- 8. Vector Scaling -->
+    <section id="vector-scaling" class="diagram-section">
+        <h2>8. Technical Provenance - Vector Scaling</h2>
+        <div class="mermaid">
+flowchart LR
+    subgraph SOURCE["Source File"]
+        V["📐 Vector File<br/>200+ GB"]
+    end
+
+    subgraph OUTPUTS["Infinite Scaling - No Quality Loss"]
+        O1["📱 Mobile<br/>100% Quality"]
+        O2["🖥️ Monitor<br/>100% Quality"]
+        O3["🖼️ Print<br/>100% Quality"]
+        O4["🏛️ Billboard<br/>100% Quality"]
+    end
+
+    V --> O1
+    V --> O2
+    V --> O3
+    V --> O4
+
+    subgraph WINNER["1/1 Winner Receives"]
+        W1["Full Vector File"]
+        W2["Physical Print<br/>(Any Size)"]
+    end
+
+    V --> W1
+    V --> W2
+
+    style V fill:#ff6b6b,stroke:#333,stroke-width:3px
+    style WINNER fill:#4ecdc4,stroke:#333
+        </div>
+    </section>
+
+    <!-- 9. Manifesto -->
+    <section id="manifesto" class="diagram-section">
+        <h2>9. The IKONBERG Manifesto - Four Pillars</h2>
+        <div class="mermaid">
+mindmap
+  root((🧠 IKONBERG<br/>Manifesto))
+    👁️ Training Awareness
+      Unlabeled Gaze
+      Recognize Mental Labeling
+      Pure Admiration
+      Abstract Forms & Colors
+    🪞 Power of Abstraction
+      Evolving Mirror
+      Grows with Collector
+      Daily Life Instrument
+      Progress Reminder
+    💻 Digital Synthesis
+      Cooking Code
+      Automated Processes
+      Like Gardening
+      Purely Digital Worlds
+    🤝 New Collectivism
+      Ubiquitous Awareness
+      Re-engage Sensuality
+      Beyond Individualism
+      Collective Clapping
+        </div>
+
+        <h3>Steiner's Theory Integration</h3>
+        <div class="mermaid">
+flowchart TB
+    subgraph PROBLEM["Modern Problem"]
+        P1["📱 Constant<br/>Overstimulation"]
+        P2["😵 Sensory<br/>Overload"]
+    end
+
+    subgraph SOLUTION["IKONBERG Solution"]
+        S1["🎯 Targeted<br/>Overstimulation"]
+        S2["Deliberate Friction"]
+        S3["Neural Pathway<br/>Expansion"]
+    end
+
+    subgraph RESULT["Outcome"]
+        R1["🧠 Intellectual<br/>Advancement"]
+        R2["❤️ Sensual<br/>Advancement"]
+    end
+
+    P1 --> S1
+    P2 --> S1
+    S1 --> S2
+    S2 --> S3
+    S3 --> R1
+    S3 --> R2
+
+    style PROBLEM fill:#ff6b6b,stroke:#333
+    style SOLUTION fill:#ff8c00,stroke:#333
+    style RESULT fill:#4ecdc4,stroke:#333
+        </div>
+    </section>
+
+    <!-- 10. System Overview -->
+    <section id="system-overview" class="diagram-section">
+        <h2>10. Complete System Overview</h2>
+        <div class="mermaid">
+flowchart TB
+    subgraph WEBSITE["🌐 After Patmos Website"]
+        direction TB
+        VID["🎬 Intro Video"]
+        ART["🖼️ 10x10 Grid<br/>100 Fragments"]
+        MODAL["📝 Claim Modal"]
+    end
+
+    subgraph BACKEND["🖥️ Backend Service"]
+        API["Express.js API"]
+        GEMINI["🤖 Gemini AI<br/>(The Guardian)"]
+    end
+
+    subgraph BLOCKCHAIN["⛓️ Ethereum Mainnet"]
+        NFT["After Patmos<br/>ERC-721"]
+        CLAIMER["AfterPatmosClaimer<br/>Smart Contract"]
+        OBS["📜 Observations<br/>(Event Logs)"]
+    end
+
+    subgraph USER["👤 Collector"]
+        WALLET["MetaMask<br/>Wallet"]
+    end
+
+    VID --> ART
+    ART --> MODAL
+    USER --> WEBSITE
+    WALLET --> WEBSITE
+
+    MODAL -->|"Submit Observation"| API
+    API -->|"VTS Analysis"| GEMINI
+    GEMINI -->|"Score >= 5"| API
+    API -->|"Sign & Relay"| CLAIMER
+    CLAIMER -->|"Transfer NFT"| NFT
+    CLAIMER -->|"Emit Event"| OBS
+    NFT -->|"Ownership"| WALLET
+
+    style GEMINI fill:#ff6b6b,stroke:#333,stroke-width:2px,color:#fff
+    style CLAIMER fill:#4ecdc4,stroke:#333,stroke-width:2px
+    style NFT fill:#9b59b6,stroke:#333,stroke-width:2px,color:#fff
+        </div>
+    </section>
+
+    <!-- Color Palette -->
+    <section class="diagram-section">
+        <h2>Color Palette Used</h2>
+        <div class="color-palette">
+            <div class="color-swatch">
+                <div class="color-box" style="background: #ff6b6b;"></div>
+                <span>Coral Red (#ff6b6b) - Primary, Guardian</span>
+            </div>
+            <div class="color-swatch">
+                <div class="color-box" style="background: #ff8c00;"></div>
+                <span>Orange (#ff8c00) - Secondary, Pak</span>
+            </div>
+            <div class="color-swatch">
+                <div class="color-box" style="background: #ff00ff;"></div>
+                <span>Magenta (#ff00ff) - CryptoPunks</span>
+            </div>
+            <div class="color-swatch">
+                <div class="color-box" style="background: #4ecdc4;"></div>
+                <span>Teal (#4ecdc4) - Success, Rewards</span>
+            </div>
+            <div class="color-swatch">
+                <div class="color-box" style="background: #9b59b6;"></div>
+                <span>Purple (#9b59b6) - Governance, NFT</span>
+            </div>
+            <div class="color-swatch">
+                <div class="color-box" style="background: #1a1a2e;"></div>
+                <span>Dark Blue (#1a1a2e) - Backgrounds</span>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            },
+            sequence: {
+                useMaxWidth: true
+            }
+        });
+    </script>
+</body>
+</html>

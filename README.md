@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logowebsite.png" alt="After Patmos Logo" width="300">
+</p>
+
 # After Patmos - IKONBERG NFT Collection
 
 A gasless NFT claiming experience powered by an AI Guardian using Visual Thinking Strategies (VTS).
@@ -50,12 +54,14 @@ Deployed on **Ethereum Mainnet**:
 | Contract | Address | Etherscan |
 |----------|---------|-----------|
 | After Patmos NFT (ERC-721) | `0x83e2654994264333e6FdfE2E43eb862866746041` | [View](https://etherscan.io/address/0x83e2654994264333e6FdfE2E43eb862866746041) |
-| AfterPatmosClaimer | `0x83FB8FF0eAB0f036c4b3dC301483D571C5573a07` | [View](https://etherscan.io/address/0x83FB8FF0eAB0f036c4b3dC301483D571C5573a07) |
+| AfterPatmosClaimer V2 | `0x80BDd352510dC5f180FA5c6fa3477B19Feb1A807` | [View](https://etherscan.io/address/0x80BDd352510dC5f180FA5c6fa3477B19Feb1A807) |
 
-**AfterPatmosClaimer Features:**
-- Allows whitelisted relayer to claim NFTs on behalf of users
+**AfterPatmosClaimer V2 Features:**
+- Gasless claims via whitelisted relayer
 - One claim per wallet address
-- Stores observations on-chain
+- One observation per NFT (forever, immutable)
+- Observation bitmap tracking for 50% threshold monitoring
+- Observations stored in events + Arweave metadata
 - Owner can withdraw ETH and manage relayer permissions
 
 ## Project Structure
@@ -130,6 +136,30 @@ python3 -m http.server 8080
 # or
 npx serve .
 ```
+
+#### Running Frontend Tests
+
+The frontend includes unit tests using Vitest:
+
+```bash
+# Install test dependencies
+npm install
+
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run tests with coverage
+npm run test:coverage
+```
+
+See [tests/README.md](tests/README.md) for more details.
+
+#### Analytics (Optional)
+
+Analytics and error tracking are available but **disabled by default** for privacy. See [ANALYTICS.md](ANALYTICS.md) for setup instructions.
 
 ## Environment Variables
 
@@ -224,6 +254,13 @@ NFT piece images are hosted on Arweave and available through OpenSea. They are n
 ## License
 
 MIT
+
+## Additional Documentation
+
+- [CONFIG.md](CONFIG.md) - Frontend configuration guide
+- [ANALYTICS.md](ANALYTICS.md) - Analytics and error tracking setup
+- [IMPROVEMENTS.md](IMPROVEMENTS.md) - Recent improvements and changes
+- [tests/README.md](tests/README.md) - Testing guide
 
 ## Links
 

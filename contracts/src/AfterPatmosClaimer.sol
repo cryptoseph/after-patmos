@@ -39,8 +39,9 @@ contract AfterPatmosClaimer is Ownable, ReentrancyGuard, IERC721Receiver {
     // ============ GAS OPTIMIZATION: Bitmap for token tracking ============
     // Two uint256s can track 256 tokens (we only need 100)
     // Bit 0 = token 1, Bit 99 = token 100
-    uint256 private _claimedBitmapLow;   // Tokens 1-128
-    uint256 private _depositedBitmapLow; // Tokens 1-128 deposited status
+    uint256 private _claimedBitmapLow;      // Tokens 1-128 claimed status
+    uint256 private _depositedBitmapLow;    // Tokens 1-128 deposited status
+    uint256 private _observationBitmapLow;  // Tokens 1-128 observation status (one observation per token forever)
 
     // Events - observations now stored here instead of state (90% gas savings)
     event NFTClaimed(
@@ -62,6 +63,7 @@ contract AfterPatmosClaimer is Ownable, ReentrancyGuard, IERC721Receiver {
     error NoTokensAvailable();
     error ObservationTooShort();
     error ObservationTooLong();
+    error ObservationAlreadyExists();  // Each token can only have one observation forever
     error TransferFailed();
     error InsufficientETH();
     error InvalidTokenId();
@@ -151,6 +153,39 @@ contract AfterPatmosClaimer is Ownable, ReentrancyGuard, IERC721Receiver {
         } else {
             _depositedBitmapLow &= ~(1 << bitIndex);
         }
+    }
+
+    /**
+     * @notice Check if a token has an observation using bitmap
+     * @param tokenId Token ID (1-100)
+     * @return True if token has an observation
+     */
+    function _hasObservation(uint256 tokenId) internal view returns (bool) {
+        if (tokenId == 0 || tokenId > 100) return false;
+        uint256 bitIndex = tokenId - 1;
+        return (_observationBitmapLow & (1 << bitIndex)) != 0;
+    }
+
+    /**
+     * @notice Check if a token has an observation using cached bitmap value
+     * @param bitmap Cached bitmap value
+     * @param tokenId Token ID (1-100)
+     * @return True if token has an observation
+     */
+    function _hasObservationCached(uint256 bitmap, uint256 tokenId) internal pure returns (bool) {
+        if (tokenId == 0 || tokenId > 100) return false;
+        uint256 bitIndex = tokenId - 1;
+        return (bitmap & (1 << bitIndex)) != 0;
+    }
+
+    /**
+     * @notice Mark a token as having an observation in bitmap
+     * @param tokenId Token ID (1-100)
+     */
+    function _setHasObservation(uint256 tokenId) internal {
+        if (tokenId == 0 || tokenId > 100) revert InvalidTokenId();
+        uint256 bitIndex = tokenId - 1;
+        _observationBitmapLow |= (1 << bitIndex);
     }
 
     // ============ Public View Functions ============
@@ -254,6 +289,69 @@ contract AfterPatmosClaimer is Ownable, ReentrancyGuard, IERC721Receiver {
     }
 
     /**
+     * @notice Get observation bitmap (for frontend optimization)
+     * @return The observation bitmap value
+     */
+    function getObservationBitmap() external view returns (uint256) {
+        return _observationBitmapLow;
+    }
+
+    /**
+     * @notice Check if a specific token has an observation
+     * @param tokenId The token ID to check
+     * @return True if the token has an observation
+     */
+    function hasObservation(uint256 tokenId) external view returns (bool) {
+        return _hasObservation(tokenId);
+    }
+
+    /**
+     * @notice Get the count of tokens with observations
+     * @return Number of tokens that have observations (for threshold tracking)
+     */
+    function getObservationCount() external view returns (uint256) {
+        uint256 bitmap = _observationBitmapLow;
+        uint256 count = 0;
+        for (uint256 i = 1; i <= 100;) {
+            if (_hasObservationCached(bitmap, i)) {
+                unchecked { ++count; }
+            }
+            unchecked { ++i; }
+        }
+        return count;
+    }
+
+    /**
+     * @notice Get all token IDs that have observations
+     * @return tokens Array of token IDs with observations
+     */
+    function getTokensWithObservations() external view returns (uint256[] memory) {
+        uint256 bitmap = _observationBitmapLow;
+
+        // First pass: count tokens with observations
+        uint256 count = 0;
+        for (uint256 i = 1; i <= 100;) {
+            if (_hasObservationCached(bitmap, i)) {
+                unchecked { ++count; }
+            }
+            unchecked { ++i; }
+        }
+
+        // Second pass: populate array
+        uint256[] memory tokens = new uint256[](count);
+        uint256 index = 0;
+        for (uint256 i = 1; i <= 100;) {
+            if (_hasObservationCached(bitmap, i)) {
+                tokens[index] = i;
+                unchecked { ++index; }
+            }
+            unchecked { ++i; }
+        }
+
+        return tokens;
+    }
+
+    /**
      * @notice Get the current nonce for an address
      * @param user The address to check
      * @return The current nonce
@@ -314,6 +412,7 @@ contract AfterPatmosClaimer is Ownable, ReentrancyGuard, IERC721Receiver {
         }
         hasClaimed[msg.sender] = true;
         _setTokenClaimed(tokenId);
+        _setHasObservation(tokenId);  // Mark token as having observation (one per token forever)
 
         // Transfer NFT to claimer
         nftContract.safeTransferFrom(address(this), msg.sender, tokenId);
@@ -361,6 +460,7 @@ contract AfterPatmosClaimer is Ownable, ReentrancyGuard, IERC721Receiver {
         // Mark as claimed (bitmap + mapping)
         hasClaimed[recipient] = true;
         _setTokenClaimed(tokenId);
+        _setHasObservation(tokenId);  // Mark token as having observation (one per token forever)
 
         // Transfer NFT to recipient
         nftContract.safeTransferFrom(address(this), recipient, tokenId);
@@ -373,7 +473,7 @@ contract AfterPatmosClaimer is Ownable, ReentrancyGuard, IERC721Receiver {
 
     /**
      * @notice Allow an NFT owner to add an observation for their token
-     * @dev Verifies ownership via the NFT contract. Emits same NFTClaimed event.
+     * @dev Verifies ownership via the NFT contract. Each token can only have ONE observation forever.
      * @param tokenId The token ID owned by the caller
      * @param observation The observation text (1-250 characters)
      */
@@ -384,10 +484,16 @@ contract AfterPatmosClaimer is Ownable, ReentrancyGuard, IERC721Receiver {
         // Verify caller owns the NFT
         if (nftContract.ownerOf(tokenId) != msg.sender) revert NotTokenOwner();
 
+        // Check if token already has an observation (one per token forever)
+        if (_hasObservation(tokenId)) revert ObservationAlreadyExists();
+
         // Validate observation length
         uint256 obsLength = bytes(observation).length;
         if (obsLength < 1) revert ObservationTooShort();
         if (obsLength > 250) revert ObservationTooLong();
+
+        // Mark token as having an observation
+        _setHasObservation(tokenId);
 
         // Emit event with observation (same event as claim for consistency)
         emit NFTClaimed(msg.sender, tokenId, observation, block.timestamp);
@@ -395,7 +501,7 @@ contract AfterPatmosClaimer is Ownable, ReentrancyGuard, IERC721Receiver {
 
     /**
      * @notice Relay observation for an NFT owner (gasless)
-     * @dev Only signer can call. Verifies ownership before emitting.
+     * @dev Only signer can call. Verifies ownership before emitting. Each token can only have ONE observation forever.
      * @param owner The address that owns the NFT
      * @param tokenId The token ID
      * @param observation The observation text
@@ -411,10 +517,16 @@ contract AfterPatmosClaimer is Ownable, ReentrancyGuard, IERC721Receiver {
         // Verify the owner actually owns the NFT
         if (nftContract.ownerOf(tokenId) != owner) revert NotTokenOwner();
 
+        // Check if token already has an observation (one per token forever)
+        if (_hasObservation(tokenId)) revert ObservationAlreadyExists();
+
         // Validate observation length
         uint256 obsLength = bytes(observation).length;
         if (obsLength < 1) revert ObservationTooShort();
         if (obsLength > 250) revert ObservationTooLong();
+
+        // Mark token as having an observation
+        _setHasObservation(tokenId);
 
         // Emit event with observation
         emit NFTClaimed(owner, tokenId, observation, block.timestamp);
@@ -492,6 +604,36 @@ contract AfterPatmosClaimer is Ownable, ReentrancyGuard, IERC721Receiver {
      */
     function resetNonce(address user, uint256 newNonce) external onlyOwner {
         nonces[user] = newNonce;
+    }
+
+    // ============ Migration Functions (for contract upgrades) ============
+
+    /**
+     * @notice Set hasClaimed status for multiple addresses (for migration from old contract)
+     * @param users Array of addresses that have already claimed
+     */
+    function migrateClaimStatus(address[] calldata users) external onlyOwner {
+        uint256 length = users.length;
+        for (uint256 i = 0; i < length;) {
+            hasClaimed[users[i]] = true;
+            unchecked { ++i; }
+        }
+    }
+
+    /**
+     * @notice Set claimed bitmap directly (for migration from old contract)
+     * @param bitmap The claimed bitmap value from old contract
+     */
+    function migrateClaimedBitmap(uint256 bitmap) external onlyOwner {
+        _claimedBitmapLow = bitmap;
+    }
+
+    /**
+     * @notice Set observation bitmap directly (for migration - tokens with existing observations)
+     * @param bitmap The observation bitmap value
+     */
+    function migrateObservationBitmap(uint256 bitmap) external onlyOwner {
+        _observationBitmapLow = bitmap;
     }
 
     /**

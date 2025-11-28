@@ -6,6 +6,7 @@
  * - IETF Draft-7 Rate Limiting
  * - Visual Thinking Strategies (VTS) AI Guardian
  * - Gasless relay claims
+ * - NFT metadata updates with observations (Arweave + Manifold)
  */
 
 require('dotenv').config();
@@ -15,6 +16,13 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { ethers } = require('ethers');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+// Metadata service for updating NFT metadata with observations
+const {
+    initMetadataService,
+    updateNFTWithObservation,
+    verifyOwnerPermissions
+} = require('./services/metadataService');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -146,10 +154,16 @@ const CLAIMER_ABI = [
     "function isTokenAvailable(uint256) view returns (bool)",
     "function getAvailableTokens() view returns (uint256[])",
     "function availableCount() view returns (uint256)",
-    "function observations(uint256) view returns (string)",
-    "function observers(uint256) view returns (address)",
     "function relayClaimNFT(address recipient, uint256 tokenId, string observation) external",
-    "function getETHBalance() view returns (uint256)"
+    "function relayAddObservation(address owner, uint256 tokenId, string observation) external",
+    "function getETHBalance() view returns (uint256)",
+    // New observation tracking functions
+    "function hasObservation(uint256) view returns (bool)",
+    "function getObservationCount() view returns (uint256)",
+    "function getObservationBitmap() view returns (uint256)",
+    "function getTokensWithObservations() view returns (uint256[])",
+    // Event for indexing observations
+    "event NFTClaimed(address indexed claimer, uint256 indexed tokenId, string observation, uint256 timestamp)"
 ];
 
 const NFT_ABI = [
@@ -160,6 +174,7 @@ const NFT_ABI = [
 let claimerContract;
 let claimerContractWithSigner;
 let nftContract;
+let metadataService = null;
 
 if (process.env.CLAIMER_CONTRACT && process.env.CLAIMER_CONTRACT !== '0x_your_deployed_claimer_contract') {
     claimerContract = new ethers.Contract(process.env.CLAIMER_CONTRACT, CLAIMER_ABI, provider);
@@ -167,6 +182,20 @@ if (process.env.CLAIMER_CONTRACT && process.env.CLAIMER_CONTRACT !== '0x_your_de
 }
 if (process.env.NFT_CONTRACT) {
     nftContract = new ethers.Contract(process.env.NFT_CONTRACT, NFT_ABI, provider);
+}
+
+// Initialize metadata service (requires OWNER_PRIVATE_KEY for Manifold setTokenURI)
+metadataService = initMetadataService(provider);
+if (metadataService) {
+    // Verify permissions on startup
+    verifyOwnerPermissions(metadataService).then(result => {
+        if (result.hasPermission) {
+            console.log('[MetadataService] Owner permissions verified - metadata updates enabled');
+        } else {
+            console.warn('[MetadataService] Owner permissions check failed:', result.reason);
+            console.warn('[MetadataService] Metadata updates may fail. Ensure OWNER_PRIVATE_KEY is correct.');
+        }
+    });
 }
 
 // ============ GUARDIAN FAILURE TRACKING ============
@@ -707,6 +736,22 @@ app.post('/api/submit-observation', async (req, res) => {
 
             console.log(`[Guardian] TX submitted: ${txResult.txHash} (broadcasting: ${txResult.broadcasting})`);
 
+            // Fire-and-forget: Update NFT metadata with observation (Arweave + Manifold)
+            if (metadataService) {
+                const timestamp = Math.floor(Date.now() / 1000);
+                updateNFTWithObservation(metadataService, tokenId, trimmedObservation, address, timestamp)
+                    .then(result => {
+                        console.log(`[MetadataService] Successfully updated metadata for token #${tokenId}`);
+                        console.log(`[MetadataService] Arweave URI: ${result.arweave.uri}`);
+                        console.log(`[MetadataService] Manifold TX: ${result.transaction.txHash}`);
+                    })
+                    .catch(err => {
+                        console.error(`[MetadataService] Failed to update metadata for token #${tokenId}:`, err.message);
+                        // Note: Claim still succeeded, only metadata update failed
+                        // The observation is still stored in the NFTClaimed event
+                    });
+            }
+
             // Construct enhanced success message with paraphrase and archetype
             const welcomeMessage = evaluation.paraphrase && evaluation.aestheticArchetype
                 ? `The Guardian hears you: "${evaluation.paraphrase}" You are recognized as ${evaluation.aestheticArchetype}. Welcome to the collective.`
@@ -729,7 +774,8 @@ app.post('/api/submit-observation', async (req, res) => {
                     tokenId: tokenId,
                     observation: trimmedObservation,
                     etherscanUrl: `https://etherscan.io/tx/${txResult.txHash}`
-                }
+                },
+                metadataUpdate: metadataService ? 'pending' : 'disabled'
             });
 
         } catch (claimError) {
@@ -765,25 +811,100 @@ app.post('/api/submit-observation', async (req, res) => {
     }
 });
 
+// ============ OBSERVATION INDEXING ENDPOINTS ============
+
+// In-memory cache for observations (rebuilt from events on startup)
+let observationsCache = new Map();  // tokenId -> { observer, observation, timestamp, txHash }
+let observationsCacheTimestamp = 0;
+const OBSERVATIONS_CACHE_TTL = 5 * 60 * 1000;  // 5 minutes
+
 /**
- * Get observation for a token
+ * Fetch all observations from blockchain events
+ * This is the source of truth - observations are stored in NFTClaimed events
+ */
+async function fetchObservationsFromEvents() {
+    if (!claimerContract) {
+        return new Map();
+    }
+
+    // Check cache freshness
+    if (observationsCache.size > 0 && Date.now() - observationsCacheTimestamp < OBSERVATIONS_CACHE_TTL) {
+        return observationsCache;
+    }
+
+    console.log('[Observations] Indexing observations from blockchain events...');
+
+    try {
+        // Get all NFTClaimed events from the beginning
+        const filter = claimerContract.filters.NFTClaimed();
+        const events = await claimerContract.queryFilter(filter, 0, 'latest');
+
+        const newCache = new Map();
+
+        for (const event of events) {
+            const tokenId = Number(event.args[1]);  // tokenId is second indexed arg
+            const observer = event.args[0];          // claimer is first indexed arg
+            const observation = event.args[2];       // observation is third arg (non-indexed)
+            const timestamp = Number(event.args[3]); // timestamp is fourth arg
+
+            // Only keep the FIRST observation for each token (one observation per token forever)
+            if (!newCache.has(tokenId)) {
+                newCache.set(tokenId, {
+                    tokenId,
+                    observer,
+                    observation,
+                    timestamp,
+                    txHash: event.transactionHash,
+                    blockNumber: event.blockNumber
+                });
+            }
+        }
+
+        observationsCache = newCache;
+        observationsCacheTimestamp = Date.now();
+
+        console.log(`[Observations] Indexed ${newCache.size} observations from events`);
+        return newCache;
+
+    } catch (error) {
+        console.error('[Observations] Error indexing events:', error);
+        return observationsCache;  // Return stale cache on error
+    }
+}
+
+/**
+ * Get observation for a specific token
+ * Falls back to event-based lookup if new contract not deployed
  */
 app.get('/api/observation/:tokenId', async (req, res) => {
     try {
-        const { tokenId } = req.params;
+        const tokenId = parseInt(req.params.tokenId, 10);
 
-        if (!claimerContract) {
-            return res.json({ observation: null, observer: null });
+        if (isNaN(tokenId) || tokenId < 1 || tokenId > 100) {
+            return res.status(400).json({ error: 'Invalid token ID (must be 1-100)' });
         }
 
-        const observation = await claimerContract.observations(tokenId);
-        const observer = await claimerContract.observers(tokenId);
+        // Fetch from events cache (works with current or new contract)
+        const cache = await fetchObservationsFromEvents();
+        const obsData = cache.get(tokenId);
 
-        res.json({
-            tokenId: Number(tokenId),
-            observation: observation || null,
-            observer: observer === ethers.ZeroAddress ? null : observer
-        });
+        if (obsData) {
+            res.json({
+                tokenId,
+                hasObservation: true,
+                observation: obsData.observation,
+                observer: obsData.observer,
+                timestamp: obsData.timestamp,
+                txHash: obsData.txHash
+            });
+        } else {
+            res.json({
+                tokenId,
+                hasObservation: false,
+                observation: null,
+                observer: null
+            });
+        }
 
     } catch (error) {
         console.error('Error fetching observation:', error);
@@ -792,38 +913,279 @@ app.get('/api/observation/:tokenId', async (req, res) => {
 });
 
 /**
- * Get all observations
+ * Get all observations (indexed from blockchain events)
  */
 app.get('/api/observations', async (req, res) => {
     try {
         if (!claimerContract) {
-            return res.json({ observations: [] });
+            return res.json({ observations: [], count: 0 });
         }
 
-        const observations = [];
+        const cache = await fetchObservationsFromEvents();
+        const observations = Array.from(cache.values());
 
-        for (let i = 1; i <= 100; i++) {
-            try {
-                const observation = await claimerContract.observations(i);
-                const observer = await claimerContract.observers(i);
-
-                if (observation && observation.length > 0) {
-                    observations.push({
-                        tokenId: i,
-                        observation,
-                        observer
-                    });
-                }
-            } catch (e) {
-                continue;
-            }
-        }
-
-        res.json({ observations });
+        res.json({
+            observations,
+            count: observations.length
+        });
 
     } catch (error) {
         console.error('Error fetching observations:', error);
         res.status(500).json({ error: 'Failed to fetch observations' });
+    }
+});
+
+/**
+ * Get observation threshold status (for triggering AI reinterpretation)
+ * Falls back to event-based counting if new contract not deployed
+ */
+app.get('/api/threshold-status', async (req, res) => {
+    try {
+        const threshold = 50;
+        let count = 0;
+
+        // Try contract method first (new contract with bitmap)
+        if (claimerContract) {
+            try {
+                const observationCount = await claimerContract.getObservationCount();
+                count = Number(observationCount);
+            } catch (contractErr) {
+                // Fallback to event-based counting
+                const cache = await fetchObservationsFromEvents();
+                count = cache.size;
+            }
+        } else {
+            // Fallback to event-based counting
+            const cache = await fetchObservationsFromEvents();
+            count = cache.size;
+        }
+
+        res.json({
+            total: 100,
+            withObservations: count,
+            threshold,
+            thresholdMet: count >= threshold,
+            percentage: count
+        });
+
+    } catch (error) {
+        console.error('Error fetching threshold status:', error);
+        res.status(500).json({ error: 'Failed to fetch threshold status' });
+    }
+});
+
+/**
+ * Get tokens with observations (bitmap-based, gas efficient)
+ * Falls back to event-based list if new contract not deployed
+ */
+app.get('/api/tokens-with-observations', async (req, res) => {
+    try {
+        let tokenIds = [];
+
+        // Try contract method first (new contract with bitmap)
+        if (claimerContract) {
+            try {
+                const tokens = await claimerContract.getTokensWithObservations();
+                tokenIds = tokens.map(t => Number(t));
+            } catch (contractErr) {
+                // Fallback to event-based list
+                const cache = await fetchObservationsFromEvents();
+                tokenIds = Array.from(cache.keys()).sort((a, b) => a - b);
+            }
+        } else {
+            // Fallback to event-based list
+            const cache = await fetchObservationsFromEvents();
+            tokenIds = Array.from(cache.keys()).sort((a, b) => a - b);
+        }
+
+        res.json({
+            tokens: tokenIds,
+            count: tokenIds.length
+        });
+
+    } catch (error) {
+        console.error('Error fetching tokens with observations:', error);
+        res.status(500).json({ error: 'Failed to fetch tokens with observations' });
+    }
+});
+
+/**
+ * Force refresh observation cache
+ */
+app.post('/api/observations/refresh', async (req, res) => {
+    try {
+        observationsCacheTimestamp = 0;  // Invalidate cache
+        const cache = await fetchObservationsFromEvents();
+
+        res.json({
+            success: true,
+            count: cache.size,
+            message: `Refreshed ${cache.size} observations from blockchain`
+        });
+
+    } catch (error) {
+        console.error('Error refreshing observations:', error);
+        res.status(500).json({ error: 'Failed to refresh observations' });
+    }
+});
+
+/**
+ * Submit observation for existing NFT owner (Gallery flow)
+ * This allows 2022 holders to add observations to their NFTs
+ */
+app.post('/api/add-observation', claimLimiter, async (req, res) => {
+    try {
+        const { address, tokenId, observation } = req.body;
+        const clientIP = getClientIP(req);
+
+        // Check if IP is blocked
+        const blockStatus = checkGuardianBlock(clientIP);
+        if (blockStatus.blocked) {
+            return res.status(429).json({
+                error: `The Guardian requires patience. Try again in ${blockStatus.remainingMins} minutes.`,
+                blocked: true
+            });
+        }
+
+        // Input validation
+        if (!address || !ethers.isAddress(address)) {
+            return res.status(400).json({ error: 'Invalid Ethereum address' });
+        }
+
+        if (!tokenId || isNaN(parseInt(tokenId)) || tokenId < 1 || tokenId > 100) {
+            return res.status(400).json({ error: 'Invalid token ID (must be 1-100)' });
+        }
+
+        if (!observation || typeof observation !== 'string') {
+            return res.status(400).json({ error: 'Observation is required' });
+        }
+
+        const trimmedObservation = observation.trim();
+        if (trimmedObservation.length < 10) {
+            return res.status(400).json({ error: 'Observation too short (minimum 10 characters)' });
+        }
+        if (trimmedObservation.length > 250) {
+            return res.status(400).json({ error: 'Observation too long (maximum 250 characters)' });
+        }
+
+        if (!claimerContract || !nftContract) {
+            return res.status(500).json({ error: 'Contracts not configured' });
+        }
+
+        // Verify ownership
+        const owner = await nftContract.ownerOf(tokenId);
+        if (owner.toLowerCase() !== address.toLowerCase()) {
+            return res.status(403).json({
+                error: 'You do not own this NFT',
+                approved: false
+            });
+        }
+
+        // Check if token already has an observation
+        const hasObs = await claimerContract.hasObservation(tokenId);
+        if (hasObs) {
+            return res.status(400).json({
+                error: 'This NFT already has an observation. Each piece can only have one observation forever.',
+                approved: false
+            });
+        }
+
+        // AI Guardian evaluation (same as claim flow)
+        console.log(`[Guardian] Evaluating gallery observation for ${address}, token ${tokenId}`);
+        const evaluation = await validateObservationWithGemini(trimmedObservation, tokenId);
+
+        if (!evaluation.approved) {
+            if (evaluation.softReject) {
+                return res.json({
+                    approved: false,
+                    softReject: true,
+                    facilitatorQuestion: evaluation.facilitatorQuestion,
+                    reason: evaluation.reason,
+                    score: evaluation.score
+                });
+            }
+
+            // Hard rejection
+            const failureRecord = recordGuardianFailure(clientIP);
+            return res.json({
+                approved: false,
+                reason: evaluation.reason,
+                score: evaluation.score,
+                attemptsRemaining: Math.max(0, 3 - failureRecord.count)
+            });
+        }
+
+        // Success - execute relay observation
+        resetGuardianFailures(clientIP);
+
+        console.log(`[Guardian] Gallery observation approved! Executing relay...`);
+
+        try {
+            const gasEstimate = await claimerContractWithSigner.relayAddObservation.estimateGas(
+                address,
+                tokenId,
+                trimmedObservation
+            );
+
+            const tx = await claimerContractWithSigner.relayAddObservation(
+                address,
+                tokenId,
+                trimmedObservation,
+                { gasLimit: gasEstimate * 120n / 100n }
+            );
+
+            console.log(`[Guardian] Gallery observation TX submitted: ${tx.hash}`);
+
+            // Invalidate cache
+            observationsCacheTimestamp = 0;
+
+            // Fire and forget confirmation
+            tx.wait().then(receipt => {
+                console.log(`[Guardian] Gallery observation confirmed in block ${receipt.blockNumber}`);
+            }).catch(err => {
+                console.error(`[Guardian] Gallery observation TX failed:`, err.message);
+            });
+
+            // Fire-and-forget: Update NFT metadata with observation (Arweave + Manifold)
+            if (metadataService) {
+                const timestamp = Math.floor(Date.now() / 1000);
+                updateNFTWithObservation(metadataService, tokenId, trimmedObservation, address, timestamp)
+                    .then(result => {
+                        console.log(`[MetadataService] Successfully updated gallery metadata for token #${tokenId}`);
+                        console.log(`[MetadataService] Arweave URI: ${result.arweave.uri}`);
+                        console.log(`[MetadataService] Manifold TX: ${result.transaction.txHash}`);
+                    })
+                    .catch(err => {
+                        console.error(`[MetadataService] Failed to update gallery metadata for token #${tokenId}:`, err.message);
+                        // Note: Observation TX still succeeded, only metadata update failed
+                        // The observation is still stored in the NFTClaimed event
+                    });
+            }
+
+            res.json({
+                approved: true,
+                aestheticArchetype: evaluation.aestheticArchetype,
+                paraphrase: evaluation.paraphrase,
+                reason: evaluation.reason,
+                score: evaluation.score,
+                txHash: tx.hash,
+                etherscanUrl: `https://etherscan.io/tx/${tx.hash}`,
+                message: 'Your observation has been inscribed onto your NFT forever.',
+                metadataUpdate: metadataService ? 'pending' : 'disabled'
+            });
+
+        } catch (txError) {
+            console.error('[Guardian] Gallery observation TX failed:', txError);
+            res.status(500).json({
+                approved: true,
+                error: 'Transaction failed: ' + txError.message,
+                message: 'The Guardian approved your observation but the transaction failed. Please try again.'
+            });
+        }
+
+    } catch (error) {
+        console.error('Error adding observation:', error);
+        res.status(500).json({ error: 'Failed to add observation' });
     }
 });
 

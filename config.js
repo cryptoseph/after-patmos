@@ -100,7 +100,7 @@ function isValidAddress(address) {
 function getContractAddresses() {
     const addresses = {
         NFT_CONTRACT: getMetaContent('nft-contract') || '0x83e2654994264333e6fdfe2e43eb862866746041',
-        CLAIMER_CONTRACT: getMetaContent('claimer-contract') || '0x83FB8FF0eAB0f036c4b3dC301483D571C5573a07',
+        CLAIMER_CONTRACT: getMetaContent('claimer-contract') || '0x80BDd352510dC5f180FA5c6fa3477B19Feb1A807',
         TREASURY_ADDRESS: getMetaContent('treasury-address') || '0x764d2f2e65153a08c5509235334b08be2ae02915',
     };
 

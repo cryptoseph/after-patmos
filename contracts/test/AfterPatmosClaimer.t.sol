@@ -54,6 +54,20 @@ contract AfterPatmosClaimerTest is Test {
         assertEq(claimer.owner(), owner);
     }
 
+    function testDeploymentRevertsWithZeroAddress() public {
+        vm.startPrank(owner);
+
+        // Zero NFT address
+        vm.expectRevert(AfterPatmosClaimer.ZeroAddress.selector);
+        new AfterPatmosClaimer(address(0), signer);
+
+        // Zero signer address
+        vm.expectRevert(AfterPatmosClaimer.ZeroAddress.selector);
+        new AfterPatmosClaimer(address(nft), address(0));
+
+        vm.stopPrank();
+    }
+
     function testDepositNFTs() public {
         // Mint NFTs to owner (must be 1-100 range for bitmap)
         vm.startPrank(owner);
@@ -106,7 +120,7 @@ contract AfterPatmosClaimerTest is Test {
         assertEq(available.length, 10);
     }
 
-    function testClaimNFT() public {
+    function testClaimNFTWithNonce() public {
         // Setup: deposit an NFT (must be in 1-100 range)
         uint256 tokenId = 1;
         vm.startPrank(owner);
@@ -117,14 +131,13 @@ contract AfterPatmosClaimerTest is Test {
         claimer.depositNFTs(tokenIds);
         vm.stopPrank();
 
-        // Create signature
+        // Verify initial nonce is 0
+        assertEq(claimer.getNonce(user1), 0);
+
+        // Create signature with nonce
         string memory observation = "I see the beauty of chaos in this piece";
-        bytes32 messageHash = keccak256(
-            abi.encodePacked(user1, tokenId, observation)
-        );
-        bytes32 ethSignedHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, ethSignedHash);
-        bytes memory signature = abi.encodePacked(r, s, v);
+        uint256 nonce = claimer.getNonce(user1);
+        bytes memory signature = _signClaimWithNonce(user1, tokenId, observation, nonce);
 
         // Expect the NFTClaimed event
         vm.expectEmit(true, true, false, true);
@@ -140,8 +153,53 @@ contract AfterPatmosClaimerTest is Test {
         assertEq(claimer.availableCount(), 0);
         assertFalse(claimer.isTokenAvailable(tokenId));
 
+        // Check nonce was incremented
+        assertEq(claimer.getNonce(user1), 1);
+
         // Check claimed bitmap has bit 0 set (for token 1)
         assertEq(claimer.getClaimedBitmap(), 1);
+    }
+
+    function testSignatureReplayProtection() public {
+        // Setup: deposit two NFTs
+        vm.startPrank(owner);
+        nft.mintSpecific(owner, 1);
+        nft.mintSpecific(owner, 2);
+        nft.setApprovalForAll(address(claimer), true);
+        uint256[] memory tokenIds = new uint256[](2);
+        tokenIds[0] = 1;
+        tokenIds[1] = 2;
+        claimer.depositNFTs(tokenIds);
+        vm.stopPrank();
+
+        // Create signature for token 1 with nonce 0
+        string memory observation = "Test observation";
+        bytes memory signature = _signClaimWithNonce(user1, 1, observation, 0);
+
+        // Claim token 1
+        vm.prank(user1);
+        claimer.claimNFT(1, observation, signature);
+
+        // Reset claim status to allow claiming again
+        vm.prank(owner);
+        claimer.resetClaimStatus(user1);
+
+        // Try to reuse the same signature (with old nonce 0) for token 2
+        // This should fail because nonce is now 1
+        bytes memory replaySignature = _signClaimWithNonce(user1, 2, observation, 0);
+        vm.prank(user1);
+        vm.expectRevert(AfterPatmosClaimer.InvalidSignature.selector);
+        claimer.claimNFT(2, observation, replaySignature);
+
+        // Create new signature with correct nonce (1)
+        bytes memory validSignature = _signClaimWithNonce(user1, 2, observation, 1);
+        vm.prank(user1);
+        claimer.claimNFT(2, observation, validSignature);
+
+        // Verify both claims succeeded
+        assertEq(nft.ownerOf(1), user1);
+        assertEq(nft.ownerOf(2), user1);
+        assertEq(claimer.getNonce(user1), 2);
     }
 
     function testRelayClaimNFT() public {
@@ -183,7 +241,7 @@ contract AfterPatmosClaimerTest is Test {
 
         // Non-signer tries to relay
         vm.prank(user1);
-        vm.expectRevert("Only signer can relay");
+        vm.expectRevert(AfterPatmosClaimer.OnlySignerAllowed.selector);
         claimer.relayClaimNFT(user2, tokenId, "Test observation");
     }
 
@@ -200,12 +258,12 @@ contract AfterPatmosClaimerTest is Test {
         vm.stopPrank();
 
         // First claim
-        bytes memory signature1 = _signClaim(user1, 1, "First observation");
+        bytes memory signature1 = _signClaimWithNonce(user1, 1, "First observation", 0);
         vm.prank(user1);
         claimer.claimNFT(1, "First observation", signature1);
 
         // Try to claim again
-        bytes memory signature2 = _signClaim(user1, 2, "Second observation");
+        bytes memory signature2 = _signClaimWithNonce(user1, 2, "Second observation", 1);
         vm.prank(user1);
         vm.expectRevert(AfterPatmosClaimer.AlreadyClaimed.selector);
         claimer.claimNFT(2, "Second observation", signature2);
@@ -223,7 +281,7 @@ contract AfterPatmosClaimerTest is Test {
         vm.stopPrank();
 
         // First user claims
-        bytes memory sig1 = _signClaim(user1, tokenId, "Observation 1");
+        bytes memory sig1 = _signClaimWithNonce(user1, tokenId, "Observation 1", 0);
         vm.prank(user1);
         claimer.claimNFT(tokenId, "Observation 1", sig1);
 
@@ -232,17 +290,53 @@ contract AfterPatmosClaimerTest is Test {
         claimer.resetClaimStatus(user1);
 
         // User1 tries to claim same token again
-        bytes memory sig2 = _signClaim(user1, tokenId, "Observation 2");
+        bytes memory sig2 = _signClaimWithNonce(user1, tokenId, "Observation 2", 1);
         vm.prank(user1);
         vm.expectRevert(AfterPatmosClaimer.TokenNotAvailable.selector);
         claimer.claimNFT(tokenId, "Observation 2", sig2);
     }
 
-    function _signClaim(address claimer_, uint256 tokenId, string memory observation) internal view returns (bytes memory) {
-        bytes32 messageHash = keccak256(abi.encodePacked(claimer_, tokenId, observation));
+    function testResetNonce() public {
+        // Setup and claim
+        uint256 tokenId = 1;
+        vm.startPrank(owner);
+        nft.mintSpecific(owner, tokenId);
+        nft.setApprovalForAll(address(claimer), true);
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = tokenId;
+        claimer.depositNFTs(tokenIds);
+        vm.stopPrank();
+
+        // Claim to increment nonce
+        bytes memory sig = _signClaimWithNonce(user1, tokenId, "Test", 0);
+        vm.prank(user1);
+        claimer.claimNFT(tokenId, "Test", sig);
+
+        assertEq(claimer.getNonce(user1), 1);
+
+        // Reset nonce
+        vm.prank(owner);
+        claimer.resetNonce(user1, 0);
+
+        assertEq(claimer.getNonce(user1), 0);
+    }
+
+    // Helper function with nonce support
+    function _signClaimWithNonce(
+        address claimer_,
+        uint256 tokenId,
+        string memory observation,
+        uint256 nonce
+    ) internal view returns (bytes memory) {
+        bytes32 messageHash = keccak256(abi.encodePacked(claimer_, tokenId, observation, nonce));
         bytes32 ethSignedHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, ethSignedHash);
         return abi.encodePacked(r, s, v);
+    }
+
+    // Legacy helper without nonce (for relay tests that don't need it)
+    function _signClaim(address claimer_, uint256 tokenId, string memory observation) internal view returns (bytes memory) {
+        return _signClaimWithNonce(claimer_, tokenId, observation, claimer.getNonce(claimer_));
     }
 
     function testInvalidSignature() public {
@@ -259,8 +353,9 @@ contract AfterPatmosClaimerTest is Test {
         // Create invalid signature (wrong private key)
         uint256 wrongPrivateKey = 0x5678;
         string memory observation = "Test observation";
+        uint256 nonce = claimer.getNonce(user1);
         bytes32 messageHash = keccak256(
-            abi.encodePacked(user1, tokenId, observation)
+            abi.encodePacked(user1, tokenId, observation, nonce)
         );
         bytes32 ethSignedHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(wrongPrivateKey, ethSignedHash);
@@ -284,8 +379,9 @@ contract AfterPatmosClaimerTest is Test {
 
         // Create signature with empty observation
         string memory observation = "";
+        uint256 nonce = claimer.getNonce(user1);
         bytes32 messageHash = keccak256(
-            abi.encodePacked(user1, tokenId, observation)
+            abi.encodePacked(user1, tokenId, observation, nonce)
         );
         bytes32 ethSignedHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, ethSignedHash);
@@ -335,6 +431,20 @@ contract AfterPatmosClaimerTest is Test {
         assertEq(claimer.getDepositedBitmap(), 0);
     }
 
+    function testWithdrawNFTsRevertsWithZeroAddress() public {
+        uint256 tokenId = 1;
+        vm.startPrank(owner);
+        nft.mintSpecific(owner, tokenId);
+        nft.setApprovalForAll(address(claimer), true);
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = tokenId;
+        claimer.depositNFTs(tokenIds);
+
+        vm.expectRevert(AfterPatmosClaimer.ZeroAddress.selector);
+        claimer.withdrawNFTs(tokenIds, address(0));
+        vm.stopPrank();
+    }
+
     function testSetSigner() public {
         address newSigner = address(99);
 
@@ -342,6 +452,12 @@ contract AfterPatmosClaimerTest is Test {
         claimer.setSigner(newSigner);
 
         assertEq(claimer.signer(), newSigner);
+    }
+
+    function testSetSignerRevertsWithZeroAddress() public {
+        vm.prank(owner);
+        vm.expectRevert(AfterPatmosClaimer.ZeroAddress.selector);
+        claimer.setSigner(address(0));
     }
 
     function testOnlyOwnerCanSetSigner() public {
@@ -364,8 +480,9 @@ contract AfterPatmosClaimerTest is Test {
         vm.stopPrank();
 
         string memory observation = "Test";
+        uint256 nonce = claimer.getNonce(user1);
         bytes32 messageHash = keccak256(
-            abi.encodePacked(user1, tokenId, observation)
+            abi.encodePacked(user1, tokenId, observation, nonce)
         );
         bytes32 ethSignedHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, ethSignedHash);
@@ -404,6 +521,14 @@ contract AfterPatmosClaimerTest is Test {
 
         assertEq(owner.balance - ownerBalanceBefore, 0.5 ether);
         assertEq(claimer.getETHBalance(), 0.5 ether);
+    }
+
+    function testETHWithdrawRevertsIfInsufficientBalance() public {
+        vm.deal(address(claimer), 0.1 ether);
+
+        vm.prank(owner);
+        vm.expectRevert(AfterPatmosClaimer.InsufficientETH.selector);
+        claimer.withdrawETH(1 ether);
     }
 
     function testOnERC721Received() public {
@@ -449,5 +574,108 @@ contract AfterPatmosClaimerTest is Test {
         for (uint256 i = 0; i < available.length; i++) {
             assertTrue(available[i] != 3);
         }
+    }
+
+    function testAddObservation() public {
+        // Mint and give NFT to user
+        uint256 tokenId = 10;
+        vm.prank(owner);
+        nft.mintSpecific(user1, tokenId);
+
+        // User adds observation
+        string memory observation = "My personal observation";
+
+        vm.expectEmit(true, true, false, true);
+        emit NFTClaimed(user1, tokenId, observation, block.timestamp);
+
+        vm.prank(user1);
+        claimer.addObservation(tokenId, observation);
+    }
+
+    function testAddObservationRevertsIfNotOwner() public {
+        uint256 tokenId = 10;
+        vm.prank(owner);
+        nft.mintSpecific(user1, tokenId);
+
+        // User2 tries to add observation for user1's NFT
+        vm.prank(user2);
+        vm.expectRevert(AfterPatmosClaimer.NotTokenOwner.selector);
+        claimer.addObservation(tokenId, "Not my NFT");
+    }
+
+    function testRelayAddObservation() public {
+        uint256 tokenId = 10;
+        vm.prank(owner);
+        nft.mintSpecific(user1, tokenId);
+
+        string memory observation = "Relayed observation";
+
+        vm.expectEmit(true, true, false, true);
+        emit NFTClaimed(user1, tokenId, observation, block.timestamp);
+
+        vm.prank(signer);
+        claimer.relayAddObservation(user1, tokenId, observation);
+    }
+
+    function testRelayAddObservationRevertsIfNotSigner() public {
+        uint256 tokenId = 10;
+        vm.prank(owner);
+        nft.mintSpecific(user1, tokenId);
+
+        vm.prank(user2);
+        vm.expectRevert(AfterPatmosClaimer.OnlySignerAllowed.selector);
+        claimer.relayAddObservation(user1, tokenId, "Test");
+    }
+
+    // Gas optimization tests
+    function testGasOptimization_ClaimNFT() public {
+        // Setup
+        uint256 tokenId = 1;
+        vm.startPrank(owner);
+        nft.mintSpecific(owner, tokenId);
+        nft.setApprovalForAll(address(claimer), true);
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = tokenId;
+        claimer.depositNFTs(tokenIds);
+        vm.stopPrank();
+
+        string memory observation = "Gas test observation";
+        bytes memory sig = _signClaim(user1, tokenId, observation);
+
+        // Measure gas
+        uint256 gasBefore = gasleft();
+        vm.prank(user1);
+        claimer.claimNFT(tokenId, observation, sig);
+        uint256 gasUsed = gasBefore - gasleft();
+
+        // Log gas usage for monitoring
+        console.log("Gas used for claimNFT:", gasUsed);
+
+        // Ensure gas usage is reasonable (adjust threshold as needed)
+        assertLt(gasUsed, 200000, "Gas usage too high for claimNFT");
+    }
+
+    function testGasOptimization_GetAvailableTokens() public {
+        // Setup: deposit all 100 tokens
+        vm.startPrank(owner);
+        for (uint256 i = 1; i <= 100; i++) {
+            nft.mintSpecific(owner, i);
+        }
+        nft.setApprovalForAll(address(claimer), true);
+
+        uint256[] memory tokenIds = new uint256[](100);
+        for (uint256 i = 0; i < 100; i++) {
+            tokenIds[i] = i + 1;
+        }
+        claimer.depositNFTs(tokenIds);
+        vm.stopPrank();
+
+        // Measure gas for getAvailableTokens with all 100 tokens
+        uint256 gasBefore = gasleft();
+        uint256[] memory available = claimer.getAvailableTokens();
+        uint256 gasUsed = gasBefore - gasleft();
+
+        console.log("Gas used for getAvailableTokens (100 tokens):", gasUsed);
+        assertEq(available.length, 100);
     }
 }

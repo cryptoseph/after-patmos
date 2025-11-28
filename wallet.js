@@ -1,25 +1,41 @@
-// Wallet connection logic
+// Wallet connection logic with security improvements
+// - Chain ID validation (Ethereum Mainnet)
+// - Account/chain change listeners
+// - EIP-6963 provider discovery support
+// - Proper error handling
+
+'use strict';
+
+// Constants
+const EXPECTED_CHAIN_ID = 1; // Ethereum Mainnet
+const EXPECTED_CHAIN_ID_HEX = '0x1';
 
 // Wallet state
 let connectedWallet = null;
 let userAddress = null;
+let currentProvider = null;
+
+// EIP-6963 provider store
+const discoveredProviders = new Map();
 
 // Initialize wallet connection UI
 function initWalletConnect() {
     const connectWalletBtn = document.getElementById('connect-wallet-btn');
     const disconnectBtn = document.getElementById('disconnect-btn');
-    const galleryBtn = document.getElementById('gallery-btn');
     const walletConnectModal = document.getElementById('wallet-connect-modal');
     const container = document.getElementById('thirdweb-connect-container');
 
     if (!container) return;
+
+    // Setup EIP-6963 provider discovery
+    setupEIP6963Discovery();
 
     // Create wallet options HTML
     container.innerHTML = `
         <h2 style="color: #fff; margin-bottom: 10px; font-size: 20px;">Connect Wallet</h2>
         <p style="color: #888; margin-bottom: 25px; font-size: 14px;">Choose how you want to connect</p>
 
-        <div class="wallet-options">
+        <div class="wallet-options" id="wallet-options-container">
             <button class="wallet-option" data-wallet="metamask">
                 <div class="wallet-icon">🦊</div>
                 <div class="wallet-info">
@@ -55,12 +71,22 @@ function initWalletConnect() {
         </div>
 
         <div id="wallet-connect-status" class="wallet-connect-status"></div>
+        <div id="network-warning" class="network-warning" style="display: none;">
+            <span style="color: #ff6b6b;">⚠️ Please switch to Ethereum Mainnet</span>
+            <button id="switch-network-btn" class="switch-network-btn">Switch Network</button>
+        </div>
     `;
 
     // Add event listeners to wallet buttons
     container.querySelectorAll('.wallet-option').forEach(btn => {
         btn.addEventListener('click', () => handleWalletSelection(btn.dataset.wallet));
     });
+
+    // Switch network button
+    const switchNetworkBtn = document.getElementById('switch-network-btn');
+    if (switchNetworkBtn) {
+        switchNetworkBtn.addEventListener('click', switchToMainnet);
+    }
 
     // Connect button click - only opens modal when not connected
     if (connectWalletBtn) {
@@ -80,6 +106,162 @@ function initWalletConnect() {
     checkExistingConnection();
 }
 
+// EIP-6963 Provider Discovery (modern wallet standard)
+function setupEIP6963Discovery() {
+    // Listen for provider announcements
+    window.addEventListener('eip6963:announceProvider', (event) => {
+        const { info, provider } = event.detail;
+        discoveredProviders.set(info.uuid, { info, provider });
+
+        if (window.AFTER_PATMOS_CONFIG?.DEBUG_MODE) {
+            console.log('[Wallet] EIP-6963 provider discovered:', info.name);
+        }
+    });
+
+    // Request providers to announce themselves
+    window.dispatchEvent(new Event('eip6963:requestProvider'));
+}
+
+// Get provider by wallet type (with EIP-6963 support)
+function getProviderForWallet(walletType) {
+    // First, try EIP-6963 discovered providers
+    for (const [, { info, provider }] of discoveredProviders) {
+        const name = info.name.toLowerCase();
+        if (walletType === 'metamask' && name.includes('metamask')) {
+            return provider;
+        }
+        if (walletType === 'coinbase' && (name.includes('coinbase') || info.rdns?.includes('coinbase'))) {
+            return provider;
+        }
+    }
+
+    // Fallback to legacy window.ethereum
+    if (!window.ethereum) return null;
+
+    // Handle multiple providers
+    if (window.ethereum.providers?.length) {
+        if (walletType === 'metamask') {
+            return window.ethereum.providers.find(p => p.isMetaMask && !p.isBraveWallet);
+        }
+        if (walletType === 'coinbase') {
+            return window.ethereum.providers.find(p => p.isCoinbaseWallet);
+        }
+    }
+
+    return window.ethereum;
+}
+
+// Validate network is Ethereum Mainnet
+async function validateNetwork(provider) {
+    try {
+        const chainId = await provider.request({ method: 'eth_chainId' });
+        const numericChainId = parseInt(chainId, 16);
+
+        if (numericChainId !== EXPECTED_CHAIN_ID) {
+            showNetworkWarning(true);
+            throw new Error(`Wrong network. Please switch to Ethereum Mainnet (Chain ID: ${EXPECTED_CHAIN_ID})`);
+        }
+
+        showNetworkWarning(false);
+        return true;
+    } catch (error) {
+        if (error.message.includes('Wrong network')) {
+            throw error;
+        }
+        console.error('[Wallet] Network validation error:', error);
+        return false;
+    }
+}
+
+// Show/hide network warning
+function showNetworkWarning(show) {
+    const warning = document.getElementById('network-warning');
+    if (warning) {
+        warning.style.display = show ? 'flex' : 'none';
+    }
+}
+
+// Switch to Ethereum Mainnet
+async function switchToMainnet() {
+    const provider = currentProvider || window.ethereum;
+    if (!provider) return;
+
+    try {
+        await provider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: EXPECTED_CHAIN_ID_HEX }],
+        });
+        showNetworkWarning(false);
+    } catch (error) {
+        // Chain not added to wallet
+        if (error.code === 4902) {
+            try {
+                await provider.request({
+                    method: 'wallet_addEthereumChain',
+                    params: [{
+                        chainId: EXPECTED_CHAIN_ID_HEX,
+                        chainName: 'Ethereum Mainnet',
+                        nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+                        rpcUrls: ['https://mainnet.infura.io/v3/'],
+                        blockExplorerUrls: ['https://etherscan.io'],
+                    }],
+                });
+            } catch (addError) {
+                console.error('[Wallet] Failed to add Ethereum Mainnet:', addError);
+            }
+        } else {
+            console.error('[Wallet] Failed to switch network:', error);
+        }
+    }
+}
+
+// Setup wallet event listeners
+function setupWalletListeners(provider) {
+    if (!provider) return;
+
+    // Remove any existing listeners to prevent duplicates
+    provider.removeAllListeners?.('accountsChanged');
+    provider.removeAllListeners?.('chainChanged');
+    provider.removeAllListeners?.('disconnect');
+
+    // Account changed
+    provider.on('accountsChanged', (accounts) => {
+        if (accounts.length === 0) {
+            // User disconnected
+            disconnectWallet();
+        } else if (accounts[0] !== userAddress) {
+            // Account switched
+            userAddress = accounts[0];
+            onWalletConnected(userAddress);
+
+            if (window.AFTER_PATMOS_CONFIG?.DEBUG_MODE) {
+                console.log('[Wallet] Account changed:', userAddress);
+            }
+        }
+    });
+
+    // Chain changed - recommended by MetaMask to reload
+    provider.on('chainChanged', (chainId) => {
+        const numericChainId = parseInt(chainId, 16);
+
+        if (numericChainId !== EXPECTED_CHAIN_ID) {
+            showNetworkWarning(true);
+        } else {
+            showNetworkWarning(false);
+        }
+
+        if (window.AFTER_PATMOS_CONFIG?.DEBUG_MODE) {
+            console.log('[Wallet] Chain changed:', numericChainId);
+        }
+    });
+
+    // Disconnect event
+    provider.on('disconnect', (error) => {
+        console.log('[Wallet] Provider disconnected:', error);
+        disconnectWallet();
+    });
+}
+
 // Handle wallet selection
 async function handleWalletSelection(walletType) {
     const statusEl = document.getElementById('wallet-connect-status');
@@ -89,6 +271,8 @@ async function handleWalletSelection(walletType) {
     statusEl.style.display = 'block';
 
     try {
+        connectedWallet = walletType;
+
         if (walletType === 'metamask') {
             await connectMetaMask();
         } else if (walletType === 'walletconnect') {
@@ -97,49 +281,82 @@ async function handleWalletSelection(walletType) {
             await connectCoinbase();
         }
     } catch (error) {
-        console.error('Connection error:', error);
+        console.error('[Wallet] Connection error:', error);
         statusEl.textContent = error.message || 'Connection failed';
         statusEl.className = 'wallet-connect-status error';
+        connectedWallet = null;
     }
 }
 
 // MetaMask connection
 async function connectMetaMask() {
-    if (typeof window.ethereum === 'undefined') {
-        throw new Error('MetaMask not installed. Please install MetaMask extension.');
+    const provider = getProviderForWallet('metamask');
+
+    if (!provider) {
+        throw new Error('MetaMask not installed. Please install the MetaMask extension.');
     }
 
-    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    // Validate network first
+    await validateNetwork(provider);
+
+    const accounts = await provider.request({ method: 'eth_requestAccounts' });
+
     if (accounts.length > 0) {
+        currentProvider = provider;
         userAddress = accounts[0];
+        setupWalletListeners(provider);
         onWalletConnected(userAddress);
     }
 }
 
-// WalletConnect connection
+// WalletConnect connection (placeholder - requires WalletConnect SDK)
 async function connectWalletConnect() {
     const statusEl = document.getElementById('wallet-connect-status');
-    statusEl.textContent = 'WalletConnect requires additional setup. Please use MetaMask for now.';
-    statusEl.className = 'wallet-connect-status error';
+
+    // Check if WalletConnect is available
+    if (typeof window.WalletConnectProvider !== 'undefined') {
+        try {
+            const provider = new window.WalletConnectProvider({
+                rpc: {
+                    1: 'https://mainnet.infura.io/v3/your-infura-key',
+                },
+            });
+
+            await provider.enable();
+            const accounts = provider.accounts;
+
+            if (accounts.length > 0) {
+                currentProvider = provider;
+                userAddress = accounts[0];
+                setupWalletListeners(provider);
+                onWalletConnected(userAddress);
+            }
+        } catch (error) {
+            throw new Error('WalletConnect connection failed: ' + error.message);
+        }
+    } else {
+        statusEl.textContent = 'WalletConnect requires additional setup. Please use MetaMask or Coinbase Wallet.';
+        statusEl.className = 'wallet-connect-status error';
+    }
 }
 
 // Coinbase Wallet connection
 async function connectCoinbase() {
-    if (typeof window.ethereum === 'undefined') {
-        throw new Error('No wallet found. Please install a wallet extension.');
+    const provider = getProviderForWallet('coinbase');
+
+    if (!provider) {
+        throw new Error('Coinbase Wallet not found. Please install the Coinbase Wallet extension.');
     }
 
-    // Check for Coinbase Wallet
-    let coinbaseProvider = window.ethereum;
+    // Validate network first
+    await validateNetwork(provider);
 
-    // If multiple providers, find Coinbase
-    if (window.ethereum.providers) {
-        coinbaseProvider = window.ethereum.providers.find(p => p.isCoinbaseWallet) || window.ethereum;
-    }
+    const accounts = await provider.request({ method: 'eth_requestAccounts' });
 
-    const accounts = await coinbaseProvider.request({ method: 'eth_requestAccounts' });
     if (accounts.length > 0) {
+        currentProvider = provider;
         userAddress = accounts[0];
+        setupWalletListeners(provider);
         onWalletConnected(userAddress);
     }
 }
@@ -154,8 +371,10 @@ function onWalletConnected(address) {
     const shortAddress = `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
 
     // Update connect button to show address
-    connectWalletBtn.textContent = shortAddress;
-    connectWalletBtn.classList.add('connected');
+    if (connectWalletBtn) {
+        connectWalletBtn.textContent = shortAddress;
+        connectWalletBtn.classList.add('connected');
+    }
 
     // Show Gallery and Disconnect buttons
     if (galleryBtn) galleryBtn.style.display = 'inline-flex';
@@ -164,10 +383,18 @@ function onWalletConnected(address) {
     // Close modal
     if (walletConnectModal) walletConnectModal.classList.remove('active');
 
-    // Store in session
+    // Store in session (with wallet type for reconnection)
     sessionStorage.setItem('connectedWallet', address);
+    sessionStorage.setItem('walletType', connectedWallet || 'unknown');
 
-    console.log('Wallet connected:', address);
+    // Track wallet connection
+    if (window.afterPatmosAnalytics) {
+        window.afterPatmosAnalytics.trackWalletConnection(connectedWallet || 'unknown', address);
+    }
+
+    if (window.AFTER_PATMOS_CONFIG?.DEBUG_MODE) {
+        console.log('[Wallet] Connected:', address, 'via', connectedWallet);
+    }
 }
 
 // Disconnect wallet
@@ -176,28 +403,82 @@ function disconnectWallet() {
     const disconnectBtn = document.getElementById('disconnect-btn');
     const galleryBtn = document.getElementById('gallery-btn');
 
+    // Clean up provider listeners
+    if (currentProvider?.removeAllListeners) {
+        currentProvider.removeAllListeners('accountsChanged');
+        currentProvider.removeAllListeners('chainChanged');
+        currentProvider.removeAllListeners('disconnect');
+    }
+
     userAddress = null;
     connectedWallet = null;
+    currentProvider = null;
 
     // Reset connect button
-    connectWalletBtn.textContent = 'Connect Wallet';
-    connectWalletBtn.classList.remove('connected');
+    if (connectWalletBtn) {
+        connectWalletBtn.textContent = 'Connect Wallet';
+        connectWalletBtn.classList.remove('connected');
+    }
 
     // Hide Gallery and Disconnect buttons
     if (galleryBtn) galleryBtn.style.display = 'none';
     if (disconnectBtn) disconnectBtn.style.display = 'none';
 
+    // Hide network warning
+    showNetworkWarning(false);
+
     sessionStorage.removeItem('connectedWallet');
-    console.log('Wallet disconnected');
+    sessionStorage.removeItem('walletType');
+
+    if (window.AFTER_PATMOS_CONFIG?.DEBUG_MODE) {
+        console.log('[Wallet] Disconnected');
+    }
 }
 
 // Check for existing connection
-function checkExistingConnection() {
+async function checkExistingConnection() {
     const savedAddress = sessionStorage.getItem('connectedWallet');
-    if (savedAddress) {
-        userAddress = savedAddress;
-        onWalletConnected(savedAddress);
+    const savedWalletType = sessionStorage.getItem('walletType');
+
+    if (savedAddress && savedWalletType) {
+        const provider = getProviderForWallet(savedWalletType) || window.ethereum;
+
+        if (provider) {
+            try {
+                // Verify the account is still connected
+                const accounts = await provider.request({ method: 'eth_accounts' });
+
+                if (accounts.length > 0 && accounts[0].toLowerCase() === savedAddress.toLowerCase()) {
+                    // Validate network
+                    try {
+                        await validateNetwork(provider);
+                    } catch {
+                        // Network wrong but still connected - show warning
+                        showNetworkWarning(true);
+                    }
+
+                    currentProvider = provider;
+                    userAddress = accounts[0];
+                    connectedWallet = savedWalletType;
+                    setupWalletListeners(provider);
+                    onWalletConnected(accounts[0]);
+                } else {
+                    // Account no longer connected
+                    sessionStorage.removeItem('connectedWallet');
+                    sessionStorage.removeItem('walletType');
+                }
+            } catch (error) {
+                console.error('[Wallet] Failed to restore connection:', error);
+                sessionStorage.removeItem('connectedWallet');
+                sessionStorage.removeItem('walletType');
+            }
+        }
     }
+}
+
+// Get current provider for external use
+function getCurrentProvider() {
+    return currentProvider || window.ethereum;
 }
 
 // Initialize on page load
@@ -206,5 +487,9 @@ document.addEventListener('DOMContentLoaded', initWalletConnect);
 // Export for use in other scripts
 window.walletState = {
     getAddress: () => userAddress,
-    isConnected: () => !!userAddress
+    isConnected: () => !!userAddress,
+    getWalletType: () => connectedWallet,
+    getProvider: getCurrentProvider,
+    disconnect: disconnectWallet,
+    switchNetwork: switchToMainnet,
 };
